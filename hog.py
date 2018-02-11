@@ -2,6 +2,7 @@
 """
 Created on Sat Nov  4 05:21:13 2017
 
+### This is just an experimental file....
 @author: Dave
 """
 import os
@@ -15,7 +16,7 @@ from skimage.feature import hog
 from skimage import data, color, exposure
 from skimage.util import img_as_ubyte, img_as_float
 
-WKdir="U:\\BBP\\Dice Rolling Machine\\Python Code\\DRM_Images"
+WKdir="S:\\Dave\QH\BBP\\Dice Rolling Machine\\Python Code\\DRM_Images\\"
 
 os.chdir(WKdir)
 DiceFile = 'RevC_100_B_20171014-121945-094.jpg'

@@ -4,6 +4,7 @@ Created on Sun Oct 22 14:38:12 2017
 See
 https://docs.opencv.org/master/d4/d70/tutorial_hough_circle.html
 
+## This is an experimental file...
 @author: Dave
 """
 import os
@@ -14,7 +15,7 @@ from PIL import Image, ImageChops, ImageOps,ImageEnhance
 from skimage import data, color, exposure,io
 from skimage.util import img_as_ubyte, img_as_float
 
-WKdir="U:\\BBP\\Dice Rolling Machine\\Python Code\\DRM_Images"
+WKdir="S:\\Dave\\QH\\BBP\\Dice Rolling Machine\\Python Code\\DRM_Images"
 
 os.chdir(WKdir)
 DiceFile = 'RevC_100_B_20171014-121945-035.jpg'

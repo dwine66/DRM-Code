@@ -2,6 +2,7 @@
 """
 Created on Thu Oct 12 20:02:36 2017
 
+### Main Image Processing Development Code
 @author: Dave
 """
 import csv
@@ -287,17 +288,18 @@ def readcsv(fname):
     return vname
 
 ### Main
-WKdir="U:\\BBP\\Dice Rolling Machine\\Python Code\\DRM_Images"
+WKdir="S:\\Dave\QH\\BBP\\Dice Rolling Machine\\Python Code\\DRM_Images"
 
 os.chdir(WKdir)
 file_names = os.listdir(WKdir) # Get list of photo names
 test_name = 'RevC_100_B_20171014-121945-079.jpg'
 
-file_names = [test_name]
+#file_names = [test_name]
 #EmptyFile = "RevC_Cal_Empty_01_20171014-094835.jpg"
 #EmptyFile = "Average.jpg"
 #DiceFile = "RevC_100_B_20171014-122503_067.jpg"
 
+# Get Ground Truth for run
 ConfigFile = 'C:\\Users\\Dave\\Desktop\\RunC_100_B_20171014-1212945_Config.csv'
 Run_df=readcsv(ConfigFile) # Read in Config File
 Run_df.set_index('Parameter',inplace = True)
