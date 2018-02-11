@@ -2,17 +2,15 @@
 """
 Created on Wed Oct  4 05:47:18 2017
 
-Initiated on 10/4/2017
+Initiated on 2/1/2018
 
 DRM_Control
 
-This module will control the servo, take pictures, do image processing and
+This module will control the plate and robot servos, take pictures, do image processing and
 log data and statistics for a given set of run parameters.
 
 Revision History
-Rev 0.1 10/8/2017:  First operable version.  Used patched Python 3.0 code from
-website to get Adafruit board running in Python 3.X
-
+Rev TBD
 
 @author: Dave
 """
@@ -61,6 +59,10 @@ def servoMove(ServoName,channel, SetOn, SetOff):
 def GetInput(Caption):
     input_name = input(Caption+': ')   
     return input_name
+
+# Plate Move
+
+
 # MatPlotLib plotting
 
 ## Initialize servos, camera, etc.
@@ -72,7 +74,7 @@ pwm = PWM(0x40)
 # Note if you'd like more debug output you can instead run:
 #pwm = PWM(0x40, debug=True)
 # Plate Servo
-platechannel = 0
+plate_channel = 0
 plateservoMin = 394  # Side 1 - Min pulse length (Default 150)
 plateservoMax = 500 # Side 2 - Max pulse length (Default 600)
 
@@ -107,10 +109,27 @@ date_now = datetime.now()
 date_now = date_now.strftime('%Y%m%d-%H%M%S')
 
 ### Main Loop
-## Initialize
+## Initialize Plate
 FlipCount=1
 servoCmd = plateservoMin # Always start on side #1
-servoMove(pwm,platechannel,0,servoCmd)
+servoMove(pwm,plate_channel,0,servoCmd)
+
+# Initialize Robot Arm
+
+servoCmd = plateservoMin # Always start on side #1
+servoMove(pwm,rbase_channel,0,servoCmd)
+
+servoCmd = plateservoMin # Always start on side #1
+servoMove(pwm,Larm_channel,0,servoCmd)
+
+servoCmd = plateservoMin # Always start on side #1
+servoMove(pwm,Uarm_channel,0,servoCmd)
+
+servoCmd = plateservoMin # Always start on side #1
+servoMove(pwm,Earm_channel,0,servoCmd)
+
+
+# Main Dice Loop
 
 sleep(WaitTime)
 
