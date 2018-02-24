@@ -2,7 +2,7 @@
 """
 Created on Wed Oct  4 05:47:18 2017
 
-Initiated on 2/1/2018
+Initiated on 2/11/2018
 
 DRM_Control
 
@@ -60,8 +60,48 @@ def GetInput(Caption):
     input_name = input(Caption+': ')   
     return input_name
 
-# Plate Move
+def RobotEx():
+    R_cmd = int(GetInput('rbase(1), Larm(2), Uarm(3), Earm(4),quit(0)'))
 
+    if R_cmd == 0:
+          print('abort')
+          return
+    else:
+          print(R_cmd)
+          R_pos = int(GetInput('Servo PWM value (150 - 600)'))
+          servoMove(pwm,R_cmd,0,R_pos)
+          return
+
+# Main Dice Loop
+def DiceLoop():
+    sleep(WaitTime)
+    FlipCount=1  
+    plateCmd = plateservoMin
+    while FlipCount <= NumFlips:
+    ## Take and save picture
+        date_now = datetime.now()
+        date_now = date_now.strftime('%Y%m%d-%H%M%S')
+        FlipSt = str(FlipCount)
+        FlipStr = FlipSt.zfill(int(math.log10(NumFlips)+1)) # add leading zeros to FlipCount
+        PicLabel = RunName + '_' + date_now +'_' + FlipStr 
+        savePic(camera,PicLabel)
+        # Image processing
+        sleep(WaitTime)  
+        ## Flip Box
+        if plateCmd == plateservoMin:
+            plateCmd = plateservoMax
+        else:
+            plateCmd = plateservoMin
+        #Flip Box now    
+        servoMove(pwm,plate_channel,0,plateCmd)
+        print(plateCmd)
+        sleep(WaitTime) # Let die settle in box
+        
+        # Display count
+        print ('Flip #' + str(FlipCount))
+        FlipCount+=1
+
+    # End Main Loop
 
 # MatPlotLib plotting
 
@@ -80,22 +120,25 @@ plateservoMax = 500 # Side 2 - Max pulse length (Default 600)
 
 # Robot Servos
 
-rbase_channel = 1
+rbase_chnl = 1
 rbase_servoMin = 150
 rbase_servoMax = 600
+rbase_servoDef = 350
 
-Larm_channel = 2
+Larm_chnl = 2
 Larm_servoMin = 150
 Larm_servoMax = 600
+Larm_servoDef = 350
 
-Uarm_channel = 3
+Uarm_chnl = 3
 Uarm_servoMin = 150
 Uarm_servoMax = 600
+Uarm_servoDef = 350
 
-Earm_channel = 4
+Earm_chnl = 4
 Earm_servoMin = 150
 Earm_servoMax = 600
-
+Earm_servoDef = 350
 
 pwm.setPWMFreq(60) # Set frequency to 60 Hz
 
@@ -110,54 +153,33 @@ date_now = date_now.strftime('%Y%m%d-%H%M%S')
 
 ### Main Loop
 ## Initialize Plate
-FlipCount=1
+
 servoCmd = plateservoMin # Always start on side #1
 servoMove(pwm,plate_channel,0,servoCmd)
 
 # Initialize Robot Arm
 
-servoCmd = plateservoMin # Always start on side #1
-servoMove(pwm,rbase_channel,0,servoCmd)
+servoCmd = rbase_servoDef 
+servoMove(pwm,rbase_chnl,0,servoCmd)
 
-servoCmd = plateservoMin # Always start on side #1
-servoMove(pwm,Larm_channel,0,servoCmd)
+servoCmd = Larm_servoDef 
+servoMove(pwm,Larm_chnl,0,servoCmd)
 
-servoCmd = plateservoMin # Always start on side #1
-servoMove(pwm,Uarm_channel,0,servoCmd)
+servoCmd = Uarm_servoDef 
+servoMove(pwm,Uarm_chnl,0,servoCmd)
 
-servoCmd = plateservoMin # Always start on side #1
-servoMove(pwm,Earm_channel,0,servoCmd)
+servoCmd = Earm_servoDef 
+servoMove(pwm,Earm_chnl,0,servoCmd)
+
+print('Robot Initialized')
+# Robot Exploration Loop
+cont = 'y'
+
+while cont == 'y':
+      RobotEx()
+      cont = GetInput('Continue?')
 
 
-# Main Dice Loop
-
-sleep(WaitTime)
-
-while FlipCount <= NumFlips:
-## Take and save picture
-    date_now = datetime.now()
-    date_now = date_now.strftime('%Y%m%d-%H%M%S')
-    FlipSt = str(FlipCount)
-    FlipStr = FlipSt.zfill(int(math.log10(NumFlips)+1)) # add leading zeros to FlipCount
-    PicLabel = RunName + '_' + date_now +'_' + FlipStr 
-    savePic(camera,PicLabel)
-    # Image processing
-    sleep(WaitTime)  
-    ## Flip Box
-    if servoCmd == plateservoMin:
-        servoCmd = plateservoMax
-    else:
-        servoCmd = plateservoMin
-    #Flip Box now    
-    servoMove(pwm,platechannel,0,servoCmd)
-    print(servoCmd)
-    sleep(WaitTime) # Let die settle in box
-    
-    # Display count
-    print ('Flip #' + str(FlipCount))
-    FlipCount+=1
-
-    # End Main Loop
 # Update stats/distribution
 print ('Run Complete')
 
