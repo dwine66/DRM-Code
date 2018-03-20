@@ -31,6 +31,64 @@ import time
 from picamera import PiCamera
 from time import sleep
 
+### Variables
+
+# Locations in BCS (Base Coordinate System, all in cm)
+
+# Robot Base
+RbX = 24.5
+RbY = 3.5
+RbZ = -1
+
+# Camera
+CamX = 12.5
+CamY = 19.5
+CamZ = 0 # on top plane of base
+
+# Tower
+TowX = 4
+TowY = 6
+TowZ = 18
+
+# Robot Arm Dimensions
+Larm_Z = 14 # Z offset of Larm axis from Rb
+Larm_L = 14 # Length of Larm
+Uarm_L = 15 # Length of Uarm
+Pinc_X = 2.5 # X offset of pincer tip from end of Uarm
+Pinc_Y = -8 # Y offset o pincer tip from end of Uarm
+
+# Plate Servo
+plate_channel = -1
+plateservoMin = 394  # Side 1 - Min pulse length (Default 150)
+plateservoMax = 500 # Side 2 - Max pulse length (Default 600)
+
+# Robot Servo Parameters
+
+rbase_chnl = 3
+rbase_servoMin = 120
+rbase_servoMax = 550 # full left
+rbase_servoDef = 350
+
+Larm_chnl = 1
+Larm_servoMin = 250
+Larm_servoMax = 470 # fully retracted
+Larm_servoDef = 350
+
+Uarm_chnl = 4
+Uarm_servoMin = 270 # fully retracted
+Uarm_servoMax = 390 # fully extended
+Uarm_servoDef = 350
+
+Earm_chnl = 0
+Earm_servoMin = 150
+Earm_servoMax = 620 # black side facing out
+Earm_servoDef = 350
+
+Pinc_chnl = 2
+Pinc_servoMin = 230 # touching
+Pinc_servoMax = 450 # end of gear teeth
+Pinc_servoDef = 350
+
 ### Functions
 
 def RobotHome():
@@ -82,6 +140,16 @@ def RobotEx():
           servoMove(pwm,R_cmd,0,R_pos)
           return
 
+# Take a picture
+def TakePicture(FlipCount):
+    date_now = datetime.now()
+    date_now = date_now.strftime('%Y%m%d-%H%M%S')
+    FlipSt = str(FlipCount)
+    FlipStr = FlipSt.zfill(int(math.log10(NumFlips)+1)) # add leading zeros to FlipCount
+    PicLabel = RunName + '_' + date_now +'_' + FlipStr 
+    savePic(camera,PicLabel)
+    return(PicLabel)
+
 # Main Dice Loop
 def DiceLoop():
     sleep(WaitTime)
@@ -115,6 +183,20 @@ def DiceLoop():
 
 # MatPlotLib plotting
 
+
+def Initialize():    
+    # Initialize Robot Arm
+    RobotHome()
+
+    # TBD - Check with Camera    
+    print('Robot Initialized')
+
+    # 0. (If on first run, pick up die and move to tower)
+
+###
+### Main Loop
+###
+    
 ## Initialize servos, camera, etc.
 camera=PiCamera()
 
@@ -123,37 +205,7 @@ pwm = PWM(0x40)
 
 # Note if you'd like more debug output you can instead run:
 #pwm = PWM(0x40, debug=True)
-# Plate Servo
-plate_channel = -1
-plateservoMin = 394  # Side 1 - Min pulse length (Default 150)
-plateservoMax = 500 # Side 2 - Max pulse length (Default 600)
 
-# Robot Servos
-
-rbase_chnl = 3
-rbase_servoMin = 120
-rbase_servoMax = 550
-rbase_servoDef = 350
-
-Larm_chnl = 1
-Larm_servoMin = 250
-Larm_servoMax = 470
-Larm_servoDef = 350
-
-Uarm_chnl = 4
-Uarm_servoMin = 390
-Uarm_servoMax = 270
-Uarm_servoDef = 350
-
-Earm_chnl = 0
-Earm_servoMin = 150
-Earm_servoMax = 620
-Earm_servoDef = 350
-
-Pinc_chnl = 2
-Pinc_servoMin = 230
-Pinc_servoMax = 450
-Pinc_servoDef = 350
 
 pwm.setPWMFreq(60) # Set frequency to 60 Hz
 
@@ -166,32 +218,27 @@ RunName = GetInput('Run Name')
 date_now = datetime.now()
 date_now = date_now.strftime('%Y%m%d-%H%M%S')
 
-### Main Loop
-## Initialize Plate
+FlipCount=0
 
-# servoCmd = plateservoMin # Always start on side #1
-# servoMove(pwm,plate_channel,0,servoCmd)
+while FlipCount <= NumFlips:
+# 1. Take null picture and do validity checks
+    NullPhoto = TakePicture(FlipCount)
+# 2. Register points
+# 3. Drop die
+    servoCmd = Pinc_servoMax
+    servoMove(pwm,Pinc_chnl,0,servoCmd)
+# 4. Take picture
+    DiePhoto = TakePicture(FlipCount)
+# 5. Image analysis
+# 6. Log result
+# 7. Calculate die orientation
+# 8. Plan motion path
+# 9. Execute motion to pick up die and return to tower
 
-# Initialize Robot Arm
+# Repeat unless error flag is thrown or run is over
 
-RobotHome()
-
-##servoCmd = rbase_servoDef 
-##servoMove(pwm,rbase_chnl,0,servoCmd)
-##
-##servoCmd = Larm_servoDef 
-##servoMove(pwm,Larm_chnl,0,servoCmd)
-##
-##servoCmd = Uarm_servoDef 
-##servoMove(pwm,Uarm_chnl,0,servoCmd)
-##
-##servoCmd = Earm_servoDef 
-##servoMove(pwm,Earm_chnl,0,servoCmd)
-##
-##servoCmd = Pinc_servoDef 
-##servoMove(pwm,Pinc_chnl,0,servoCmd)
-
-print('Robot Initialized')
+    print('Throws in work')
+    FlipCount = FlipCount+1
 # Robot Exploration Loop
 cont = 'y'
 
@@ -201,14 +248,8 @@ while cont == 'y':
 
 # Home the Robot
 
-servoCmd = 390
-servoMove(pwm,Uarm_chnl,0,servoCmd)
-
-servoCmd = 470
-servoMove(pwm,Larm_chnl,0,servoCmd)
-
-servoCmd = 250
-servoMove(pwm,rbase_chnl,0,servoCmd)
+## TBD - Put die away
+RobotHome()
 
 # Update stats/distribution
 print ('Run Complete')
