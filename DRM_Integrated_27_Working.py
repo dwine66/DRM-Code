@@ -36,19 +36,24 @@ import time
 from time import sleep
 
 # Imaging modules
-import cv
 import cv2
+
 from PIL import Image, ImageChops, ImageOps,ImageEnhance
 from skimage import data, color, exposure
 from skimage.util import img_as_ubyte, img_as_float
 
 PiFlag = False
-
+   
 print 'Raspberry Pi Enabled:',PiFlag,'\n'
-WKdir="C:\\Users\\Dave\\Desktop"
+
+PCDir="S:\Dave\QH\BBP\Dice Rolling Machine\DRM-Poisson"
+PiDir="/home/pi/Desktop/DRM/Images/"
 
 # Raspberry PI only
 if PiFlag == True:
+
+# For imaging
+    import cv2.cv as cv
 # For servo control
     import sys
     sys.path.append('/home/pi/Adafruit-Raspberry-Pi-Python-Code/Adafruit_PWM_Servo_Driver')
@@ -57,7 +62,7 @@ if PiFlag == True:
     # Camera
     from picamera import PiCamera
     
-    WKdir= "/home/pi/Desktop/DRM-Code-master"
+    WKdir = PiDir
     
     ## Initialize servos, camera, etc.
     camera=PiCamera()
@@ -206,10 +211,17 @@ def OpenCV_Hough(argv,av2):
 
     rows = gray.shape[0]
     print (rows)
-    # Will need to update this to work on Pi
-    circles = cv2.HoughCircles(gray, cv2.HOUGH_GRADIENT, 1, rows / 200,
+
+    if PiFlag is True:
+        # Use version of OpenCV that works on PI
+        circles = cv2.HoughCircles(gray, cv.CV_HOUGH_GRADIENT, 1, rows / 200,
                                param1=100, param2=11 ,
                                minRadius=3, maxRadius=9)
+    else:
+        circles = cv2.HoughCircles(gray, cv2.HOUGH_GRADIENT, 1, rows / 200,
+                               param1=100, param2=11 ,
+                               minRadius=3, maxRadius=9)
+
     # Default is 100,30,15,30
     Pips=0
    # print (len(circles))
@@ -331,7 +343,7 @@ def savePic(CamName,Text):
     # Save picture to Pi desktop
     CamName.start_preview()
     CamName.annotate_text = Text
-    CamName.capture('/home/pi/Desktop/DRM_Images/' + Text + '.jpg')
+    CamName.capture(PiDir + Text + '.jpg')
     CamName.stop_preview()
 # Image Processing
 
@@ -390,10 +402,13 @@ def DiceLoop():
 #file_names = os.listdir(WKdir) # Get list of photo names
 
 ## Imaging Setup
-WKdir="S:\\Dave\QH\\BBP\\Dice Rolling Machine\\DRM Rev C Images"
+if PiFlag is False:
+    ImDir=PCDir+"Images"
+else:
+    ImDir=PiDir+"Images/"
 
-os.chdir(WKdir)
-file_names = os.listdir(WKdir) # Get list of photo names
+os.chdir(ImDir)
+file_names = os.listdir(ImDir) # Get list of photo names
 #test_name = 'RevC_100_B_20171014-121945-079.jpg'
 test_name = 'd_20180601-193139_0.jpg'
 #file_names = [test_name]
@@ -402,11 +417,13 @@ test_name = 'd_20180601-193139_0.jpg'
 #DiceFile = "RevC_100_B_20171014-122503_067.jpg"
 
 # Get Ground Truth for run
-ConfigFile = 'C:\\Users\\Dave\\Desktop\\RunC_100_B_20171014-1212945_Config.csv'
+ConfigFile = 'Ground_Truth.csv'
 Run_df=readcsv(ConfigFile) # Read in Config File
+
 Run_df.set_index('Parameter',inplace = True)
 GT_df=Run_df.drop(Run_df.index[0:6])
 GT_df['Value']=pd.to_numeric(GT_df['Value'])
+
 # Robot Configuration
 os.chdir(WKdir)
 DHP_file = 'DRM_Sainsmart_DHP.csv'
