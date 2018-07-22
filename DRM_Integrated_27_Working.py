@@ -1,26 +1,25 @@
 # -*- coding: utf-8 -*-
 """
-Created on Wed Oct  4 05:47:18 2017
-
-Initiated on 2/11/2018
-
-DRM_Control_Integrated
+#################
+DRM_Integrated_27
+#################
 
 This module will control the plate and robot servos, take pictures, do image processing and
 log data and statistics for a given set of run parameters.
 
 Notes:
-1. All dimensions in cm.
+    1. All dimensions in cm.
 
-Revision History
-Rev A - 7/12/2018: Combined code from DRM_Imaging_27 and DRM_Control_Tower_Robot_27
+Revision History:
+    Rev A - 7/12/2018: Combined code from DRM_Imaging_27 and DRM_Control_Tower_Robot_27
 
-@author: Dave
+@author: Dave Wine
 """
 ### Libraries
 import os
 import re
 import math
+import sys
 import csv
 import collections
 
@@ -300,7 +299,7 @@ def RobotMove_IK():
           print('abort')
           return
     else:
-        user_input = raw_input("Input X, Y, Z (cm) in RB frame, and Pincer rotation and state (deg): ")
+        user_input = raw_input("Input X, Y, Z (cm) in RB frame, and Pincer rotation (deg) and state (deg): ")
         input_list = user_input.split(',')
         numbers = [float(x.strip()) for x in input_list]
         IK_x = numbers[0]
@@ -310,6 +309,104 @@ def RobotMove_IK():
         IK_pinc = numbers[4]
         return (IK_x,IK_y,IK_z,IK_rot,IK_pinc)
 
+
+def Robot_Move(XC,YC,ZC,RC,PC):
+    global Rbase_CurPos,L_arm_CurPos,U_arm_CurPos,E_arm_CurPos,Pinc_CurPos
+    
+    MoveRobot = True
+    
+    print 'Command To: ',XC,YC,ZC
+    
+    Th1,Th2,Th3 = IK_Calc(XC,YC,ZC)    
+    
+    print 'New IK theta angles (degrees):', Th1,Th2,Th3
+    
+    # Translate these into servo commands
+    Rbase_NewPos = int(Th1 * Rbase_SC_m + Rbase_SC_b)
+    L_arm_NewPos = int(Th2 * L_arm_SC_m + L_arm_SC_b)
+    U_arm_NewPos = int(Th3 * U_arm_SC_m + U_arm_SC_b)
+    
+    # Do end of arm stuff
+    E_arm_NewPos = int(R_command * E_arm_SC_m + E_arm_SC_b) #-Rbase_NewPos
+    Pinc_NewPos = int(P_command * Pinc_SC_m + Pinc_SC_b)
+    
+    print 'New Position Servo Commands: ',Rbase_NewPos,L_arm_NewPos, U_arm_NewPos, E_arm_NewPos, Pinc_NewPos
+    
+    FK = For_Kin(L_arm_X,L_arm_Z,U_arm_X,E_arm_X,E_arm_Z,Pinc_Z,Th1,Th2,Th3)
+    
+    # Check to make sure the robot isn't going to crash...
+    if Rbase_NewPos < Rbase_SMin or Rbase_NewPos > Rbase_SMax:
+        print'RBase IK out of bounds: ',Rbase_NewPos
+        MoveRobot = False   
+    if L_arm_NewPos < L_arm_SMin or L_arm_NewPos > L_arm_SMax:
+        print 'L_arm IK out of bounds: ',L_arm_NewPos        
+        MoveRobot = False
+    if U_arm_NewPos < U_arm_SMin or U_arm_NewPos > U_arm_SMax:
+        print 'U_arm IK out of bounds: ', U_arm_NewPos   
+        MoveRobot = False
+    if E_arm_NewPos < E_arm_SMin or E_arm_NewPos > E_arm_SMax:
+        print 'E_arm IK out of bounds: ', E_arm_NewPos   
+        MoveRobot = False
+    if Pinc_NewPos < Pinc_SMin or Pinc_NewPos > Pinc_SMax:
+        print 'Pinc IK out of bounds: ', Pinc_NewPos   
+        MoveRobot = False
+                
+    if MoveRobot == True: # Only move if possible
+
+        # Compare to current servo commands
+        Rbase_Diff = Rbase_CurPos-Rbase_NewPos
+        L_arm_Diff = L_arm_CurPos-L_arm_NewPos
+        U_arm_Diff = U_arm_CurPos-U_arm_NewPos
+        E_arm_Diff = E_arm_CurPos-E_arm_NewPos
+        Pinc_Diff = Pinc_CurPos - Pinc_NewPos
+        # Figure out dynamics
+        
+        # Run movement loop
+        tstep = 10 # number of subdivisions
+        T = 10 # Total time for move in seconds
+        t_int = T/tstep
+        
+        # Make sure Gripper is open
+        
+        # Move Robot!
+        # Calculate step increments (do this all first to speed up movement)
+        PolyStep = []
+        for i in range(0,tstep+1):
+            PolyStep.append(Poly345(float(i)/float(tstep))) # Get intermediate steps per Angeles p.236
+        print 'Motion Steps Defined'
+        
+        # Then move the robot with it    
+        for i in range(0,tstep+1):   
+            
+            s = PolyStep[i]
+            
+            Theta_1_j = int(Rbase_CurPos+(Rbase_NewPos-Rbase_CurPos)*s)
+            Theta_2_j = int(L_arm_CurPos+(L_arm_NewPos-L_arm_CurPos)*s)
+            Theta_3_j = int(U_arm_CurPos+(U_arm_NewPos-U_arm_CurPos)*s) 
+            Theta_4_j = int(E_arm_CurPos+(E_arm_NewPos-E_arm_CurPos)*s) 
+            
+            print 'Motion Step #:',i, Theta_1_j,Theta_2_j,Theta_3_j,Theta_4_j,s #,'\n'
+            # Command Servos    
+            if PiFlag == True:
+                
+                servoMove(pwm,Rbase_Ch,0,Theta_1_j)
+                servoMove(pwm,L_arm_Ch,0,Theta_2_j)
+                servoMove(pwm,U_arm_Ch,0,Theta_3_j)
+                servoMove(pwm,E_arm_Ch,0,Theta_4_j)
+    
+            # Then open or close pincer appropriately
+                servoMove(pwm,Pinc_Ch,0,P_command)        
+    
+        # Update position
+        Rbase_CurPos = Rbase_NewPos
+        L_arm_CurPos = L_arm_NewPos
+        U_arm_CurPos = U_arm_NewPos
+        E_arm_CurPos = E_arm_NewPos
+        Pinc_CurPos = Pinc_NewPos
+        print 'Pincer state updated to', Pinc_NewPos,'from', Pinc_CurPos
+    
+    else:
+        print ('Invalid move parameters')
 
 def servoMove(ServoName,channel, SetOn, SetOff):
     # Move Servo - from Adafruit
@@ -394,46 +491,25 @@ def DiceLoop():
 ###############################################################################
 
 ### Setup
-    
-## Read in data from files
 
 # Camera & Image Configuration
-#WKdir="S:\\Dave\QH\\BBP\\Dice Rolling Machine\\Python Code\\DRM_Images"
-#file_names = os.listdir(WKdir) # Get list of photo names
 
-## Imaging Setup
+# Directory Setup
 if PiFlag is False:
-    ImDir=PCDir+"Images"
+    ImDir=PCDir+"\\Images"
+    ConDir = PCDir + "\\Config"
 else:
     ImDir=PiDir+"Images/"
+    ConDir = PiDir + "Config"
 
-os.chdir(ImDir)
-file_names = os.listdir(ImDir) # Get list of photo names
-#test_name = 'RevC_100_B_20171014-121945-079.jpg'
-test_name = 'd_20180601-193139_0.jpg'
-#file_names = [test_name]
-#EmptyFile = "RevC_Cal_Empty_01_20171014-094835.jpg"
-#EmptyFile = "Average.jpg"
-#DiceFile = "RevC_100_B_20171014-122503_067.jpg"
-
-# Get Ground Truth for run
-ConfigFile = 'Ground_Truth.csv'
-Run_df=readcsv(ConfigFile) # Read in Config File
-
-Run_df.set_index('Parameter',inplace = True)
-GT_df=Run_df.drop(Run_df.index[0:6])
-GT_df['Value']=pd.to_numeric(GT_df['Value'])
-
+# First, initialize the robot
 # Robot Configuration
-os.chdir(WKdir)
+os.chdir(ConDir)
 DHP_file = 'DRM_Sainsmart_DHP.csv'
 DHP_df=readcsv(DHP_file) # Read in Config File
 DHP_df.set_index('Name',inplace = True)
 
 # Zero_Th is the angle in the range of motion of the servo that is defined as zero in the local CS
-
-#GT_df=DHP_df.drop(Run_df.index[0:6])
-#DHP_df['Value']=pd.to_numeric(DHP_df['Value']
 
 # Robot Parameters
 Rbase_BC = np.array(DHP_df['Rbase'][9:12]).T
@@ -560,108 +636,30 @@ print ('Initial IK angles (degrees):',Th1,Th2,Th3)
 
 FK = For_Kin(L_arm_X,L_arm_Z,U_arm_X,E_arm_X,E_arm_Z,Pinc_Z,Th1,Th2,Th3)
 
-### IK Loop
+## The robot should be out of frame at this point, so take a picture
+if PiFlag is True:
+    EmptyFrame = TakePicture(0) # return filename
+else:
+    print ('Take picture of empty frame')
+
+## Next, move the robot to the center of the camera field and take a picture
+
+# eventually do robot parameter correction here, but hopefully it's close enough for now....
+
+### IK Loop - functionalize this
 
 cont = 'y'
 
 while cont == 'y':
     
-    MoveRobot = True
-    
+    # Get new position by asking the user
     X_command,Y_command,Z_command,R_command,P_command = RobotMove_IK()
 
-    print 'Command To: ',X_command,Y_command,Z_command
-    
-    Th1,Th2,Th3 = IK_Calc(X_command,Y_command,Z_command)    
-    
-    print 'New IK theta angles (degrees):', Th1,Th2,Th3
-    
-    # Translate these into servo commands
-    Rbase_NewPos = int(Th1 * Rbase_SC_m + Rbase_SC_b)
-    L_arm_NewPos = int(Th2 * L_arm_SC_m + L_arm_SC_b)
-    U_arm_NewPos = int(Th3 * U_arm_SC_m + U_arm_SC_b)
-    
-    # Do end of arm stuff
-    E_arm_NewPos = int(R_command * E_arm_SC_m + E_arm_SC_b) #-Rbase_NewPos
-    Pinc_NewPos = int(P_command * Pinc_SC_m + Pinc_SC_b)
-    
-    print 'New Position Servo Commands: ',Rbase_NewPos,L_arm_NewPos, U_arm_NewPos, E_arm_NewPos, Pinc_NewPos
-    
-    FK = For_Kin(L_arm_X,L_arm_Z,U_arm_X,E_arm_X,E_arm_Z,Pinc_Z,Th1,Th2,Th3)
-    
-    # Check to make sure the robot isn't going to crash...
-    if Rbase_NewPos < Rbase_SMin or Rbase_NewPos > Rbase_SMax:
-        print'RBase IK out of bounds: ',Rbase_NewPos
-        MoveRobot = False   
-    if L_arm_NewPos < L_arm_SMin or L_arm_NewPos > L_arm_SMax:
-        print 'L_arm IK out of bounds: ',L_arm_NewPos        
-        MoveRobot = False
-    if U_arm_NewPos < U_arm_SMin or U_arm_NewPos > U_arm_SMax:
-        print 'U_arm IK out of bounds: ', U_arm_NewPos   
-        MoveRobot = False
-    if E_arm_NewPos < E_arm_SMin or E_arm_NewPos > E_arm_SMax:
-        print 'E_arm IK out of bounds: ', E_arm_NewPos   
-        MoveRobot = False
-    if Pinc_NewPos < Pinc_SMin or Pinc_NewPos > Pinc_SMax:
-        print 'Pinc IK out of bounds: ', Pinc_NewPos   
-        MoveRobot = False
-                
-    if MoveRobot == False:
-        continue
-    
-    # Compare to current servo commands
-    Rbase_Diff = Rbase_CurPos-Rbase_NewPos
-    L_arm_Diff = L_arm_CurPos-L_arm_NewPos
-    U_arm_Diff = U_arm_CurPos-U_arm_NewPos
-    E_arm_Diff = E_arm_CurPos-E_arm_NewPos
-    Pinc_Diff = Pinc_CurPos - Pinc_NewPos
-    # Figure out dynamics
-    
-    # Run movement loop
-    tstep = 10 # number of subdivisions
-    T = 10 # Total time for move in seconds
-    t_int = T/tstep
-    
-    # Make sure Gripper is open
-    
-    # Move Robot!
-    # Calculate step increments (do this all first to speed up movement)
-    PolyStep = []
-    for i in range(0,tstep+1):
-        PolyStep.append(Poly345(float(i)/float(tstep))) # Get intermediate steps per Angeles p.236
-    print 'Motion Steps Defined'
-    
-    # Then move the robot with it    
-    for i in range(0,tstep+1):   
-        
-        s = PolyStep[i]
-        
-        Theta_1_j = int(Rbase_CurPos+(Rbase_NewPos-Rbase_CurPos)*s)
-        Theta_2_j = int(L_arm_CurPos+(L_arm_NewPos-L_arm_CurPos)*s)
-        Theta_3_j = int(U_arm_CurPos+(U_arm_NewPos-U_arm_CurPos)*s) 
-        Theta_4_j = int(E_arm_CurPos+(E_arm_NewPos-E_arm_CurPos)*s) 
-        
-        print 'Motion Step #:',i, Theta_1_j,Theta_2_j,Theta_3_j,Theta_4_j,s #,'\n'
-        # Command Servos    
-        if PiFlag == True:
-            
-            servoMove(pwm,Rbase_Ch,0,Theta_1_j)
-            servoMove(pwm,L_arm_Ch,0,Theta_2_j)
-            servoMove(pwm,U_arm_Ch,0,Theta_3_j)
-            servoMove(pwm,E_arm_Ch,0,Theta_4_j)
-
-        # Then open or close pincer appropriately
-            servoMove(pwm,Pinc_Ch,0,P_command)        
-
-    # Update position
-    Rbase_CurPos = Rbase_NewPos
-    L_arm_CurPos = L_arm_NewPos
-    U_arm_CurPos = U_arm_NewPos
-    E_arm_CurPos = E_arm_NewPos
-    Pinc_CurPos = Pinc_NewPos
-    print 'Pincer state updated to', Pinc_NewPos,'from', Pinc_CurPos
+    Robot_Move(X_command,Y_command,Z_command,R_command,P_command)
     
     cont = GetInput('Continue (y/n)?')
+
+sys.exit('Program Aborted')
 
 ## Get run parameters - # flips, die type, etc.
 DiceType = GetInput('Dice Type')
@@ -688,6 +686,28 @@ while FlipCount <= NumFlips:
 # 4. Take picture
     DiePhoto = TakePicture(FlipCount)
 # 5. Image analysis
+
+    #file_names = os.listdir(WKdir) # Get list of photo names    
+    os.chdir(ImDir)
+    file_names = os.listdir(ImDir) # Get list of photo names
+    #test_name = 'RevC_100_B_20171014-121945-079.jpg'
+    test_name = 'd_20180601-193139_0.jpg'
+    #file_names = [test_name]
+    #EmptyFile = "RevC_Cal_Empty_01_20171014-094835.jpg"
+    #EmptyFile = "Average.jpg"
+    #DiceFile = "RevC_100_B_20171014-122503_067.jpg"
+    
+    # Get Ground Truth for run
+    ConfigFile = 'Ground_Truth.csv'
+    Run_df=readcsv(ConfigFile) # Read in Config File
+    
+    Run_df.set_index('Parameter',inplace = True)
+    GT_df=Run_df.drop(Run_df.index[0:6])
+    GT_df['Value']=pd.to_numeric(GT_df['Value'])
+    
+    #GT_df=DHP_df.drop(Run_df.index[0:6])
+    #DHP_df['Value']=pd.to_numeric(DHP_df['Value']
+
 # 6. Log result
 # 7. Calculate die orientation
 # 8. Plan motion path
