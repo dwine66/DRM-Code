@@ -190,7 +190,7 @@ def IK_Calc(XB,YB,ZB):
     
     return Theta1_IK_d,Theta2_IK_d,Theta3_IK_d
 
-def OpenCV_Hough(argv,av2):
+def Get_Pips(argv,av2):
 # https://docs.opencv.org/master/d4/d70/tutorial_hough_circle.html
     filename = argv
     default_file = 'default_file'
@@ -445,16 +445,19 @@ def savePic(CamName,Text):
 # Image Processing
 
 # Take a picture
-def TakePicture(FlipCount):
+def TakePicture(RollCount):
     # Take a picture with the Pi camera and datestamp it
-    date_now = datetime.now()
-    date_now = date_now.strftime('%Y%m%d-%H%M%S')
-    FlipSt = str(FlipCount)
-    FlipStr = FlipSt.zfill(int(math.log10(NumFlips)+1)) # add leading zeros to FlipCount
-    PicLabel = RunName + '_' + date_now +'_' + FlipStr 
-    savePic(camera,PicLabel)
-    return(PicLabel)
-
+    if PiFlag is True:
+        date_now = datetime.now()
+        date_now = date_now.strftime('%Y%m%d-%H%M%S')
+        RollSt = str(RollCount)
+        RollStr = RollSt.zfill(int(math.log10(NumRolls)+1)) # add leading zeros to FlipCount
+        PicLabel = RunName + '_' + date_now +'_' + RollStr 
+        savePic(camera,PicLabel)
+        return(PicLabel)
+    else:
+        print 'Camera routine executed'
+        return('null photo')
 # Main Dice Loop
 def DiceLoop():
     sleep(WaitTime)
@@ -490,6 +493,27 @@ def DiceLoop():
 ### Main Code
 ###############################################################################
 
+## Get run parameters - # flips, die type, etc.
+    
+print 'Dice Rolling Machine - Poisson'
+
+DiceType = GetInput('Dice Type')
+NumRolls = int(GetInput('Number of Flips'))
+
+DiceNotes = GetInput('Dice Description')
+RunName = GetInput('Run Name')
+
+## Other Parameters
+WaitTime = 2 # Pause before flip
+date_now = datetime.now()
+date_now = date_now.strftime('%Y%m%d-%H%M%S')
+
+## Initialize Main Loop
+RollCount=0
+
+
+# 5. Image analysis
+
 ### Setup
 
 # Camera & Image Configuration
@@ -501,6 +525,28 @@ if PiFlag is False:
 else:
     ImDir=PiDir+"Images/"
     ConDir = PiDir + "Config"
+
+
+#file_names = os.listdir(WKdir) # Get list of photo names    
+os.chdir(ImDir)
+file_names = os.listdir(ImDir) # Get list of photo names
+#test_name = 'RevC_100_B_20171014-121945-079.jpg'
+test_name = 'd_20180601-193139_0.jpg'
+#file_names = [test_name]
+#EmptyFile = "RevC_Cal_Empty_01_20171014-094835.jpg"
+#EmptyFile = "Average.jpg"
+#DiceFile = "RevC_100_B_20171014-122503_067.jpg"
+
+# Get Ground Truth for run
+ConfigFile = 'Ground_Truth.csv'
+Run_df=readcsv(ConDir +'\\'+ ConfigFile) # Read in Config File
+
+Run_df.set_index('Parameter',inplace = True)
+GT_df=Run_df.drop(Run_df.index[0:6])
+GT_df['Value']=pd.to_numeric(GT_df['Value'])
+
+    #GT_df=DHP_df.drop(Run_df.index[0:6])
+    #DHP_df['Value']=pd.to_numeric(DHP_df['Value']
 
 # First, initialize the robot
 # Robot Configuration
@@ -637,12 +683,16 @@ print ('Initial IK angles (degrees):',Th1,Th2,Th3)
 FK = For_Kin(L_arm_X,L_arm_Z,U_arm_X,E_arm_X,E_arm_Z,Pinc_Z,Th1,Th2,Th3)
 
 ## The robot should be out of frame at this point, so take a picture
-if PiFlag is True:
-    EmptyFrame = TakePicture(0) # return filename
-else:
-    print ('Take picture of empty frame')
+EmptyFrame = TakePicture(0) # return filename
+
+    
+# Do some imaging on this picture to determine center of frame
+# Then transform into robot coordinates to use below
+# Also maybe get die coordinates
 
 ## Next, move the robot to the center of the camera field and take a picture
+#Robot_Move()# Insert frame center coordinates here
+CRFrame = TakePicture(0) # return filename
 
 # eventually do robot parameter correction here, but hopefully it's close enough for now....
 
@@ -650,64 +700,37 @@ else:
 
 cont = 'y'
 
-while cont == 'y':
-    
+#while cont == 'y':    
     # Get new position by asking the user
-    X_command,Y_command,Z_command,R_command,P_command = RobotMove_IK()
+ #   X_command,Y_command,Z_command,R_command,P_command = RobotMove_IK()
 
-    Robot_Move(X_command,Y_command,Z_command,R_command,P_command)
-    
-    cont = GetInput('Continue (y/n)?')
+  #  Robot_Move(X_command,Y_command,Z_command,R_command,P_command)
 
-sys.exit('Program Aborted')
+## Next, go pick up die from holding area and hover over dice tower
 
-## Get run parameters - # flips, die type, etc.
-DiceType = GetInput('Dice Type')
-NumFlips = int(GetInput('Number of Flips'))
+# Move 1: Robot's current position to die holding area
+# Move 2: Pick die up (may need an image)
+# Move 3: Move to tower
 
-DiceNotes = GetInput('Dice Description')
-RunName = GetInput('Run Name')
-
-## Other Parameters
-WaitTime = 2 # Pause before flip
-date_now = datetime.now()
-date_now = date_now.strftime('%Y%m%d-%H%M%S')
-
-## Initialize Main Loop
-FlipCount=0
-
-while FlipCount <= NumFlips:
+# Main Rolling Loop
+print 'Starting Rolls'
+RollCount = 1
+while RollCount <= NumRolls:
 # 1. Take null picture and do validity checks
-    NullPhoto = TakePicture(FlipCount)
+
+    NullPhoto = TakePicture(RollCount)
 # 2. Register points
+    
 # 3. Drop die
-    servoCmd = Pinc_SMax
-    servoMove(pwm,Pinc_Ch,0,servoCmd)
-# 4. Take picture
-    DiePhoto = TakePicture(FlipCount)
-# 5. Image analysis
+    if PiFlag is True:
+        servoCmd = Pinc_SMax
+        servoMove(pwm,Pinc_Ch,0,servoCmd)
 
-    #file_names = os.listdir(WKdir) # Get list of photo names    
-    os.chdir(ImDir)
-    file_names = os.listdir(ImDir) # Get list of photo names
-    #test_name = 'RevC_100_B_20171014-121945-079.jpg'
-    test_name = 'd_20180601-193139_0.jpg'
-    #file_names = [test_name]
-    #EmptyFile = "RevC_Cal_Empty_01_20171014-094835.jpg"
-    #EmptyFile = "Average.jpg"
-    #DiceFile = "RevC_100_B_20171014-122503_067.jpg"
+# 4. Take a picture of it
+    DiePhoto = TakePicture(RollCount)
     
-    # Get Ground Truth for run
-    ConfigFile = 'Ground_Truth.csv'
-    Run_df=readcsv(ConfigFile) # Read in Config File
-    
-    Run_df.set_index('Parameter',inplace = True)
-    GT_df=Run_df.drop(Run_df.index[0:6])
-    GT_df['Value']=pd.to_numeric(GT_df['Value'])
-    
-    #GT_df=DHP_df.drop(Run_df.index[0:6])
-    #DHP_df['Value']=pd.to_numeric(DHP_df['Value']
-
+# 5. Go image it and get pip count (or maybe do this later in batch)
+    Pips = Get_Pips(DiePhoto,'null')
 # 6. Log result
 # 7. Calculate die orientation
 # 8. Plan motion path
@@ -715,30 +738,23 @@ while FlipCount <= NumFlips:
 
 # Repeat unless error flag is thrown or run is over
 
-    print('Throws in work')
-    FlipCount = FlipCount+1
-# Robot Exploration Loop
+    print 'Roll ',RollCount,' of ',NumRolls, 'successfully completed'
+    # Elapsed time per roll?
+    RollCount = RollCount+1    
+#RobotEx()
 
-cont = 'y'
-
-while cont == 'y':
-      RobotEx()
-      cont = GetInput('Continue (y/n)?')
+# When all done with runs, go to data reduction
+cont = GetInput('Continue to data reduction (y/n)?')
+if cont <>'y':
+    exit('Program Aborted')
 
 # Update stats/distribution
-print ('Run Complete')
+print ('Run complete, proceeding to data reduction')
 
 # Write log file
 
+### Main Statistical Reduction Code
 
-
-
-
-### Main Imaging Code
-
-
-
-## Loop
 pc = {}
 for filename in file_names:
     
