@@ -41,37 +41,7 @@ from PIL import Image, ImageChops, ImageOps,ImageEnhance
 from skimage import data, color, exposure
 from skimage.util import img_as_ubyte, img_as_float
 
-PiFlag = False
-   
-print 'Raspberry Pi Enabled:',PiFlag,'\n'
 
-PCDir="S:\Dave\QH\BBP\Dice Rolling Machine\DRM-Poisson"
-PiDir="/home/pi/Desktop/DRM/Images/"
-
-# Raspberry PI only
-if PiFlag == True:
-
-# For imaging
-    import cv2.cv as cv
-# For servo control
-    import sys
-    sys.path.append('/home/pi/Adafruit-Raspberry-Pi-Python-Code/Adafruit_PWM_Servo_Driver')
-    from Adafruit_PWM_Servo_Driver import PWM
-    
-    # Camera
-    from picamera import PiCamera
-    
-    WKdir = PiDir
-    
-    ## Initialize servos, camera, etc.
-    camera=PiCamera()
-    
-    # Initialise the PCA9685 using the default address (0x40).
-    pwm = PWM(0x40)
-    # Note if you'd like more debug output you can instead run:
-    #pwm = PWM(0x40, debug=True)
-    
-    pwm.setPWMFreq(60) # Set frequency to 60 Hz
 
 ### Functions
 
@@ -159,7 +129,7 @@ def For_Kin(LAX,LAZ,UAX,EAX,EAZ,PZ,th1,th2,th3):
 
 def GetInput(Caption):
     # Dumb user input grab
-    input_name = raw_input(Caption+': ')   
+    input_name = raw_input(Caption + ': ')   
     return input_name
 
 def IK_Calc(XB,YB,ZB):
@@ -458,7 +428,7 @@ def TakePicture(RollCount):
     else:
         print 'Camera routine executed'
         return('null photo')
-# Main Dice Loop
+# Main Dice flipping loop from Bernoulli Build
 def DiceLoop():
     sleep(WaitTime)
     FlipCount=1  
@@ -493,40 +463,63 @@ def DiceLoop():
 ### Main Code
 ###############################################################################
 
+### Setup
+
+print 'Dice Rolling Machine (Poisson Build)','\n'
+
 ## Get run parameters - # flips, die type, etc.
-    
-print 'Dice Rolling Machine - Poisson'
+
+PiFlag = bool(int(GetInput('Pi (1) or PC (0)')))
+print 'Raspberry Pi Enabled:',PiFlag,'\n'
 
 DiceType = GetInput('Dice Type')
 NumRolls = int(GetInput('Number of Flips'))
-
 DiceNotes = GetInput('Dice Description')
 RunName = GetInput('Run Name')
 
-## Other Parameters
+## Define other parameters
 WaitTime = 2 # Pause before flip
+
 date_now = datetime.now()
 date_now = date_now.strftime('%Y%m%d-%H%M%S')
 
-## Initialize Main Loop
-RollCount=0
+PCDir="S:\Dave\QH\BBP\Dice Rolling Machine\DRM-Poisson"
+PiDir="/home/pi/Desktop/DRM/Images/"
 
+### Initialize Main Loop
+## Raspberry PI only
+if PiFlag is True:
 
-# 5. Image analysis
-
-### Setup
-
-# Camera & Image Configuration
-
-# Directory Setup
-if PiFlag is False:
-    ImDir=PCDir+"\\Images"
-    ConDir = PCDir + "\\Config"
-else:
+# For imaging on Pi we need this module...
+    import cv2.cv as cv
+# For servo control
+#    import sys
+    sys.path.append('/home/pi/Adafruit-Raspberry-Pi-Python-Code/Adafruit_PWM_Servo_Driver')
+    from Adafruit_PWM_Servo_Driver import PWM
+    
+# Camera
+    from picamera import PiCamera
+    
+    WKdir = PiDir
+# Initialize servos, camera, etc.
+    camera=PiCamera()
+    
+    # Initialise the PCA9685 using the default address (0x40).
+    pwm = PWM(0x40)
+    # Note if you'd like more debug output you can instead run:
+    #pwm = PWM(0x40, debug=True)
+    
+    pwm.setPWMFreq(60) # Set frequency to 60 Hz
+    
     ImDir=PiDir+"Images/"
     ConDir = PiDir + "Config"
 
+else:
+    ImDir=PCDir+"\\Images"
+    ConDir = PCDir + "\\Config"
 
+## Set up reference images and directories
+    
 #file_names = os.listdir(WKdir) # Get list of photo names    
 os.chdir(ImDir)
 file_names = os.listdir(ImDir) # Get list of photo names
@@ -538,6 +531,7 @@ test_name = 'd_20180601-193139_0.jpg'
 #DiceFile = "RevC_100_B_20171014-122503_067.jpg"
 
 # Get Ground Truth for run
+
 ConfigFile = 'Ground_Truth.csv'
 Run_df=readcsv(ConDir +'\\'+ ConfigFile) # Read in Config File
 
@@ -685,7 +679,6 @@ FK = For_Kin(L_arm_X,L_arm_Z,U_arm_X,E_arm_X,E_arm_Z,Pinc_Z,Th1,Th2,Th3)
 ## The robot should be out of frame at this point, so take a picture
 EmptyFrame = TakePicture(0) # return filename
 
-    
 # Do some imaging on this picture to determine center of frame
 # Then transform into robot coordinates to use below
 # Also maybe get die coordinates
@@ -712,7 +705,9 @@ cont = 'y'
 # Move 2: Pick die up (may need an image)
 # Move 3: Move to tower
 
-# Main Rolling Loop
+### Main Rolling Loop
+RollCount = 0
+
 print 'Starting Rolls'
 RollCount = 1
 while RollCount <= NumRolls:
@@ -753,7 +748,7 @@ print ('Run complete, proceeding to data reduction')
 
 # Write log file
 
-### Main Statistical Reduction Code
+### Statistical Analysis Code
 
 pc = {}
 for filename in file_names:
