@@ -41,8 +41,6 @@ from PIL import Image, ImageChops, ImageOps,ImageEnhance
 from skimage import data, color, exposure
 from skimage.util import img_as_ubyte, img_as_float
 
-
-
 ### Functions
 
 def Angle_to_SC(SC_Vec):
@@ -73,8 +71,8 @@ def diff_images(fileempty,file):
 #    img1=contr1.enhance(20)
 #    img2=contr2.enhance(20)
     
-    diff12.save("diff12.jpg")
-    diff21.save("diff21.jpg")
+    diff12.save(ImDir+"diff12.jpg")
+    diff21.save(ImDir+"diff21.jpg")
 
 def For_Kin(LAX,LAZ,UAX,EAX,EAZ,PZ,th1,th2,th3):
     ## Forward Kinematics Testing - Modify PT based on input
@@ -160,6 +158,8 @@ def IK_Calc(XB,YB,ZB):
     
     return Theta1_IK_d,Theta2_IK_d,Theta3_IK_d
 
+
+
 def Get_Pips(argv,av2):
 # https://docs.opencv.org/master/d4/d70/tutorial_hough_circle.html
     filename = argv
@@ -173,23 +173,22 @@ def Get_Pips(argv,av2):
         print ('Usage: hough_circle.py [image_name -- default ' + default_file + '] \n')
         return -1
     
-
     retval, threshold = cv2.threshold(src,15, 255, cv2.THRESH_BINARY)   
     blur = cv2.medianBlur(threshold, 9)
     gray = cv2.cvtColor(blur, cv2.COLOR_BGR2GRAY)
 
     rows = gray.shape[0]
-    print (rows)
+    print ('Rows:',rows)
 
     if PiFlag is True:
         # Use version of OpenCV that works on PI
         circles = cv2.HoughCircles(gray, cv.CV_HOUGH_GRADIENT, 1, rows / 200,
                                param1=100, param2=11 ,
-                               minRadius=3, maxRadius=9)
+                               minRadius=2, maxRadius=9)
     else:
         circles = cv2.HoughCircles(gray, cv2.HOUGH_GRADIENT, 1, rows / 200,
                                param1=100, param2=11 ,
-                               minRadius=3, maxRadius=9)
+                               minRadius=2, maxRadius=9)
 
     # Default is 100,30,15,30
     Pips=0
@@ -483,7 +482,7 @@ WaitTime = 2 # Pause before flip
 date_now = datetime.now()
 date_now = date_now.strftime('%Y%m%d-%H%M%S')
 
-PCDir="S:\Dave\QH\BBP\Dice Rolling Machine\DRM-Poisson"
+PCDir="S:\Dave\QH\BBP\Dice Rolling Machine\DRM-Poisson\\"
 PiDir="/home/pi/Desktop/DRM/Images/"
 
 ### Initialize Main Loop
@@ -515,8 +514,8 @@ if PiFlag is True:
     ConDir = PiDir + "Config"
 
 else:
-    ImDir=PCDir+"\\Images"
-    ConDir = PCDir + "\\Config"
+    ImDir=PCDir+"\Images\\"
+    ConDir = PCDir + "\Config\\"
 
 ## Set up reference images and directories
     
@@ -524,7 +523,7 @@ else:
 os.chdir(ImDir)
 file_names = os.listdir(ImDir) # Get list of photo names
 #test_name = 'RevC_100_B_20171014-121945-079.jpg'
-test_name = 'd_20180601-193139_0.jpg'
+test_name = ImDir+'\\'+'null_20180818-125743_001.jpg'
 #file_names = [test_name]
 #EmptyFile = "RevC_Cal_Empty_01_20171014-094835.jpg"
 #EmptyFile = "Average.jpg"
@@ -533,7 +532,7 @@ test_name = 'd_20180601-193139_0.jpg'
 # Get Ground Truth for run
 
 ConfigFile = 'Ground_Truth.csv'
-Run_df=readcsv(ConDir +'\\'+ ConfigFile) # Read in Config File
+Run_df=readcsv(ConDir + ConfigFile) # Read in Config File
 
 Run_df.set_index('Parameter',inplace = True)
 GT_df=Run_df.drop(Run_df.index[0:6])
@@ -753,24 +752,24 @@ print ('Run complete, proceeding to data reduction')
 pc = {}
 for filename in file_names:
     
-    if filename[3].isdigit():
-        DiceFile = filename
+    if filename[0]=='t': #.isdigit():
+        DiceFile = ImDir+'\\'+filename
     else:
-        print ('non-image file')
+        print ('irrelevant file')
         continue
     # Do image preprocessing
     img = Image.open(DiceFile)
-    
+    print('File:',DiceFile)
     diff_images(test_name,DiceFile)
     
-    DiceFile='diff21.jpg'
+    DiceFile=ImDir+'diff21.jpg'
     img = ImageOps.grayscale(img)
     img_gamma = exposure.adjust_gamma(img_as_float(img),1.8)  
     img_cont = exposure.adjust_sigmoid(img_as_float(img),cutoff=0.5, gain=50)
     cv_image = img_as_ubyte(img_gamma)
     
     # Send to Hough for pip ID    
-    Pips = OpenCV_Hough(DiceFile,cv_image)
+    Pips = Get_Pips(DiceFile,cv_image)
     print (filename +': '+ str(Pips))
     pc[filename]=Pips
     
@@ -804,3 +803,48 @@ plt.title('Histogram of Difference')
 plt.axis([-6, 6, 0, 100])
 plt.grid(True)
 plt.show()
+
+def Get_Lines():
+# https://docs.opencv.org/master/d9/db0/tutorial_hough_lines.html
+        # Loads an image
+    src = cv.imread(filename, cv.IMREAD_GRAYSCALE)
+    # Check if image is loaded fine
+    if src is None:
+        print ('Error opening image!')
+        print ('Usage: hough_lines.py [image_name -- default ' + default_file + '] \n')
+        return -1
+    
+    dst = cv.Canny(src, 50, 200, None, 3)
+    
+    # Copy edges to the images that will display the results in BGR
+    cdst = cv.cvtColor(dst, cv.COLOR_GRAY2BGR)
+    cdstP = np.copy(cdst)
+    
+    lines = cv.HoughLines(dst, 1, np.pi / 180, 150, None, 0, 0)
+    
+    if lines is not None:
+        for i in range(0, len(lines)):
+            rho = lines[i][0][0]
+            theta = lines[i][0][1]
+            a = math.cos(theta)
+            b = math.sin(theta)
+            x0 = a * rho
+            y0 = b * rho
+            pt1 = (int(x0 + 1000*(-b)), int(y0 + 1000*(a)))
+            pt2 = (int(x0 - 1000*(-b)), int(y0 - 1000*(a)))
+            cv.line(cdst, pt1, pt2, (0,0,255), 3, cv.LINE_AA)
+    
+    
+    linesP = cv.HoughLinesP(dst, 1, np.pi / 180, 50, None, 50, 10)
+    
+    if linesP is not None:
+        for i in range(0, len(linesP)):
+            l = linesP[i][0]
+            cv.line(cdstP, (l[0], l[1]), (l[2], l[3]), (0,0,255), 3, cv.LINE_AA)
+    
+    cv.imshow("Source", src)
+    cv.imshow("Detected Lines (in red) - Standard Hough Line Transform", cdst)
+    cv.imshow("Detected Lines (in red) - Probabilistic Line Transform", cdstP)
+    
+    cv.waitKey()
+    return 0
