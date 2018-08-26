@@ -48,6 +48,158 @@ def Angle_to_SC(SC_Vec):
     SC_Vec_b = float(SC_Vec[2])-SC_Vec_m*(float(SC_Vec[0])-float(SC_Vec[4]))
     return SC_Vec_m,SC_Vec_b
 
+def Get_Loc(filename):
+    src = filename
+    # Check if image is loaded fine
+    default_file =  'S:\\Dave\\QH\\BBP\\Dice Rolling Machine\\DRM-Poisson\\Images\\diff21.jpg'
+    filename = default_file
+    #filename = argv[0] if len(argv) > 0 else default_file
+    # Loads an image
+    src = cv2.imread(filename, cv2.IMREAD_GRAYSCALE)
+    if src is None:
+        print ('Error opening image!')
+ #       print ('Usage: hough_lines.py [image_name -- default ' + default_file + '] \n')
+    #    return -1
+    
+    retval, threshold = cv2.threshold(src,15, 255, cv2.THRESH_BINARY)   
+    blur = cv2.medianBlur(threshold, 9)
+       # gray = cv2.cvtColor(blur, cv2.COLOR_BGR2GRAY)
+    
+    dst = cv2.Canny(blur, 50, 200, None, 3)
+    
+    # Copy edges to the images that will display the results in BGR
+    cdst = cv2.cvtColor(dst, cv2.COLOR_GRAY2BGR)
+    cdstP = np.copy(cdst)
+    
+    lines = cv2.HoughLines(dst, 1, np.pi / 180, 52, None, 0, 0)
+    
+    if lines is not None:
+        for i in range(0, len(lines)):
+            rho = lines[i][0][0]
+            theta = lines[i][0][1]
+            a = math.cos(theta)
+            b = math.sin(theta)
+            x0 = a * rho
+            y0 = b * rho
+            pt1 = (int(x0 + 1000*(-b)), int(y0 + 1000*(a)))
+            pt2 = (int(x0 - 1000*(-b)), int(y0 - 1000*(a)))
+            cv2.line(cdst, pt1, pt2, (0,0,255), 3, cv.LINE_AA)
+    print(lines)
+    
+    linesP = cv2.HoughLinesP(dst, 1, np.pi / 180, 20, 20, 10)
+    
+    if linesP is not None:
+        linesD=np.zeros((len(linesP),3),dtype=float)
+    
+        for i in range(0, len(linesP)):
+            l = linesP[i][0]
+            l2 = [float(j) for j in l]
+            cv2.line(cdstP, (l[0], l[1]), (l[2], l[3]), (0,0,255), 2, cv2.LINE_AA)
+            
+            # clean up lines
+            try: # trap vertical line singularity
+                slope = (l2[3]-l2[1])/(l2[2]-l2[0]) 
+            except:
+                slope = (l2[3]-l2[1])/(l2[2]-(l2[0]+0.001))
+                print ('slope corrected')
+            linesD[i][0] = slope
+            linesD[i][1] = l2[3]-slope*l2[2] # intercept
+            linesD[i][2] = math.hypot((l2[3]-l2[1]), (l2[2]-l2[0])) # length
+        print(linesD)
+    
+        # check for duplicates - only add if not a duplicate
+        SThres = .1
+        IThres = .01
+        Dup=[]
+        for i in range (0,len(linesP)):
+            for j in range (0,len(linesP)):
+                if j>i:
+                    if abs(linesD[i][0]-linesD[j][0]) > SThres: # if slopes don't match
+                        continue
+                    else: # check intercepts
+                        print (i,' and ',j ,'match slopes')
+                        if abs(linesD[i][1] - linesD[j][1])/linesD[i][1] < IThres: # and if intercepts match
+                            print (i,' and ',j ,'match intercepts')
+                            if linesD[i][2]>linesD[j][2]: # pick the longest line
+                                print(i, 'is longest')
+                                Dup.append(j)
+                            else:
+                                print(j, 'is longest')
+                                Dup.append(i)
+                        else:
+                            continue
+                else:
+                    continue    
+        print(Dup,' ',len(Dup))
+        linesB = np.delete(linesD,np.array(Dup),axis=0)
+        print ("Number of lines: ",len(linesB))
+        print(linesB)
+        
+        if len(linesB) > 4: # delete the shortest line
+            linesB = np.delete(linesB,np.argmin(linesB[:,2]),axis=0)
+            print ('deleted a line')
+        
+        # get angles for DH
+        Die_Angle = math.degrees(math.atan((linesB[1][0])))
+        print('Die Angle',Die_Angle)
+
+        cv2.imshow("Detected Lines (in red) - Probabilistic Line Transform", cdstP)
+        cv2.waitKey()
+        cv2.destroyAllWindows() 
+        
+        linesB = np.insert(linesB,4,linesB[0],axis=0)
+        # Now create four new points that are the bounding box of the die
+        BoxP = np.zeros((5,2),dtype=int)
+        for i in range (1,len(linesB)):
+            if abs(linesB[i][0]-linesB[i-1][0]) > SThres: # if lines are not parallel
+                x = (linesB[i][1]-linesB[i-1][1])/(linesB[i-1][0]-linesB[i][0])
+                y = linesB[i-1][0]*x + linesB[i-1][1]
+                BoxP[i][0]=int(x)
+                BoxP[i][1]=int(y)
+                
+        BoxP = np.delete(BoxP,(0),axis=0)
+    
+        # Finally, create a bounding box in screen coordinates (use for cropping)
+        BoxB=np.zeros((4,2),dtype=int)
+        
+        # Upper Left
+        BoxB[0][0]=np.amin(BoxP[:,0])
+        BoxB[0][1]=np.amin(BoxP[:,1])
+        cv2.circle(cdstP, (BoxB[0][0], BoxB[0][1]), 6, (255,0,0),1, 8)
+        
+        # Upper Right
+        BoxB[1][0]=np.amax(BoxP[:,0])
+        BoxB[1][1]=np.amin(BoxP[:,1])
+        
+        # Lower Left
+        BoxB[2][0]=np.amin(BoxP[:,0])
+        BoxB[2][1]=np.amax(BoxP[:,1])
+        
+        #Lower Right
+        BoxB[3][0]=np.amax(BoxP[:,0])
+        BoxB[3][1]=np.amax(BoxP[:,1])    
+        
+        print(BoxB)
+        cv2.line(cdstP, (BoxB[0][0], BoxB[0][1]), (BoxB[3][0], BoxB[3][1]), (0,255,0), 3, cv2.LINE_AA)
+        cv2.line(cdstP, (BoxB[1][0], BoxB[1][1]), (BoxB[2][0], BoxB[2][1]), (0,255,0), 3, cv2.LINE_AA)   
+    
+    # The center of the die is just the average of them
+        Die_X=(BoxB[0][0]+BoxB[1][0])/2
+        Die_Y=(BoxB[0][1]+BoxB[2][1])/2
+        
+        print ('Die Center (X,Y):' ,Die_X,Die_Y)
+        cv2.line(cdstP, (Die_X,Die_Y), (0,0), (255,0,255), 2, cv2.LINE_AA)
+        
+        cv2.imshow("Source", blur)
+        cv2.imshow("Source - Canny", dst)
+        cv2.imshow("Detected Lines (in red) - Standard Hough Line Transform", cdst)
+        cv2.imshow("Detected Lines (in red) - Probabilistic Line Transform", cdstP)
+        
+        cv.waitKey()
+        cv.destroyAllWindows()    
+        
+        return (Die_X,Die_Y,Die_Angle,BoxB)
+
 def diff_images(fileempty,file):
     img1=Image.open(fileempty)
     img2=Image.open(file)
@@ -73,6 +225,7 @@ def diff_images(fileempty,file):
     
     diff12.save(ImDir+"diff12.jpg")
     diff21.save(ImDir+"diff21.jpg")
+    print ('differential image created')
 
 def For_Kin(LAX,LAZ,UAX,EAX,EAZ,PZ,th1,th2,th3):
     ## Forward Kinematics Testing - Modify PT based on input
@@ -768,8 +921,14 @@ for filename in file_names:
     img_cont = exposure.adjust_sigmoid(img_as_float(img),cutoff=0.5, gain=50)
     cv_image = img_as_ubyte(img_gamma)
     
+    # Send to Line for location
+    Die_Loc = Get_Loc(DiceFile)
+    
+    print (Die_Loc)
+    #cv_image=cv_image.crop((,1006,756))
+    
     # Send to Hough for pip ID    
-    Pips = Get_Pips(DiceFile,cv_image)
+#    Pips = Get_Pips(DiceFile,cv_image)
     print (filename +': '+ str(Pips))
     pc[filename]=Pips
     
@@ -804,47 +963,3 @@ plt.axis([-6, 6, 0, 100])
 plt.grid(True)
 plt.show()
 
-def Get_Lines():
-# https://docs.opencv.org/master/d9/db0/tutorial_hough_lines.html
-        # Loads an image
-    src = cv.imread(filename, cv.IMREAD_GRAYSCALE)
-    # Check if image is loaded fine
-    if src is None:
-        print ('Error opening image!')
-        print ('Usage: hough_lines.py [image_name -- default ' + default_file + '] \n')
-        return -1
-    
-    dst = cv.Canny(src, 50, 200, None, 3)
-    
-    # Copy edges to the images that will display the results in BGR
-    cdst = cv.cvtColor(dst, cv.COLOR_GRAY2BGR)
-    cdstP = np.copy(cdst)
-    
-    lines = cv.HoughLines(dst, 1, np.pi / 180, 150, None, 0, 0)
-    
-    if lines is not None:
-        for i in range(0, len(lines)):
-            rho = lines[i][0][0]
-            theta = lines[i][0][1]
-            a = math.cos(theta)
-            b = math.sin(theta)
-            x0 = a * rho
-            y0 = b * rho
-            pt1 = (int(x0 + 1000*(-b)), int(y0 + 1000*(a)))
-            pt2 = (int(x0 - 1000*(-b)), int(y0 - 1000*(a)))
-            cv.line(cdst, pt1, pt2, (0,0,255), 3, cv.LINE_AA)
-    
-    
-    linesP = cv.HoughLinesP(dst, 1, np.pi / 180, 50, None, 50, 10)
-    
-    if linesP is not None:
-        for i in range(0, len(linesP)):
-            l = linesP[i][0]
-            cv.line(cdstP, (l[0], l[1]), (l[2], l[3]), (0,0,255), 3, cv.LINE_AA)
-    
-    cv.imshow("Source", src)
-    cv.imshow("Detected Lines (in red) - Standard Hough Line Transform", cdst)
-    cv.imshow("Detected Lines (in red) - Probabilistic Line Transform", cdstP)
-    
-    cv.waitKey()
-    return 0
