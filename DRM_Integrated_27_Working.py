@@ -35,32 +35,29 @@ from datetime import datetime
 import time
 from time import sleep
 
-# Imaging modules
-import cv2
-
 from PIL import Image, ImageChops, ImageOps,ImageEnhance
 from skimage import data, color, exposure
 from skimage.util import img_as_ubyte, img_as_float
 
 ### Functions
 
-def Angle_to_SC(SC_Vec):
+def angle_to_sc(SC_Vec):
     SC_Vec_m = (float(SC_Vec[2]) - float(SC_Vec[3])) / (float(SC_Vec[0]) - float(SC_Vec[1]) ) 
     SC_Vec_b = float(SC_Vec[2])-SC_Vec_m*(float(SC_Vec[0])-float(SC_Vec[4]))
     return SC_Vec_m,SC_Vec_b
 
-def Get_Loc(filename):
+def get_contours(File_Name):
 
+    File_Name = ImDir+File_Name
     default_file =  'S:\\Dave\\QH\\BBP\\Dice Rolling Machine\\DRM-Poisson\\Images\\diff21.jpg'
-
-    src = cv.imread(filename, cv.IMREAD_GRAYSCALE)
-    src_col = cv.imread(filename)
+    print 'Filename used:',File_Name
+    src = cv.imread(File_Name, cv.IMREAD_GRAYSCALE)
+    src_col = cv.imread(File_Name)
     
     # Check if image is loaded fine
     if src is None:
         print ('Error opening image!')
-        print ('Usage: hough_lines.py [image_name -- default ' + default_file + '] \n')
-    #    return -1
+        src = default_file
     
     # Contours
     retval, threshold = cv.threshold(src,60, 255, cv.THRESH_BINARY)  
@@ -101,7 +98,7 @@ def Get_Loc(filename):
                 
             elif len(approx) > 4:
                 #area=cv.contourArea(cnt)
-                x,y,w,h = cv2.boundingRect(cnt)
+                x,y,w,h = cv.boundingRect(cnt)
                 aspect_ratio = float(w)/float(h)
                 print 'Aspect Ratio: ',aspect_ratio
                 if abs(aspect_ratio - 1) < 0.2: #check to see if it's really a circle
@@ -117,26 +114,26 @@ def Get_Loc(filename):
                 cv.drawContours(src_col,[cnt],0,(0,0,255),1)
 
             cv.imshow("Contours", src_col)
-            #cv.waitKey()
+            cv.waitKey()
 
         else:
             print 'contour length tiny - ignored (in orange)'
             cv.drawContours(src_col,[cnt],0,(0,128,255),8)
             
-    #cv.waitKey()
+    cv.waitKey()
     cv.destroyAllWindows()
     
     if S_count != 1:
         cx=0
         cy=0
         Die_Angle=0
-        C_count=-100
+        C_count=-1
             
     return (cx,cy,Die_Angle,C_count,S_count)
 
-def diff_images(fileempty,file):
-    img1=Image.open(fileempty)
-    img2=Image.open(file)
+def get_diff_image(Null_File,Roll_File):
+    img1=Image.open(ImDir + Null_File + '.jpg')
+    img2=Image.open(ImDir + Roll_File + '.jpg')
     
     img1=img1.crop((685,50,1006,756))
     img2=img2.crop((685,50,1006,756))
@@ -212,10 +209,10 @@ def For_Kin(LAX,LAZ,UAX,EAX,EAZ,PZ,th1,th2,th3):
     print 'Forward Kinematics End Point: ',EndPt[0:3],'\n'
     return EndPt[0:3]
 
-def GetInput(Caption):
+def get_user_input(Caption):
     # Dumb user input grab
-    input_name = raw_input(Caption + ': ')   
-    return input_name
+    Return_String = raw_input(Caption + ': ')   
+    return Return_String
 
 def IK_Calc(XB,YB,ZB):
         
@@ -255,11 +252,12 @@ def Poly4567(tau):
     s_tau = -20*tau**7+70*tau**6-84*tau**5+35*tau**4
     return(s_tau)
 
-def readcsv(fname):
-    vname = pd.DataFrame(pd.read_csv(fname,na_values='n/a'))
-    return vname
+def read_csv_to_df(filename):
+    # reads a CSV file into a dataframe
+    df_name = pd.DataFrame(pd.read_csv(filename,na_values='n/a'))
+    return df_name
     
-def RobotEx():
+def robot_ex():
     # Simple manual single-channel robot command function
     R_cmd = int(GetInput('Earm(0), Larm(1), Pinc(2), Rbase(3), Uarm(4),quit(5)'))
 
@@ -269,31 +267,31 @@ def RobotEx():
     else:
           print(R_cmd)
           R_pos = int(GetInput('Servo PWM value (150 - 600)'))
-          servoMove(pwm,R_cmd,0,R_pos)
+          servo_move(pwm,R_cmd,0,R_pos)
           return
  
-def RobotHome():
+def robot_home():
     if PiFlag == True:
     # Initialize Robot (parallel to long edge, fully extended)
         servoCmd = U_arm_SC_b
-        servoMove(pwm,U_arm_Ch,0,servoCmd)
+        servo_move(pwm,U_arm_Ch,0,servoCmd)
         
         servoCmd = L_arm_SC_b
-        servoMove(pwm,L_arm_Ch,0,servoCmd)
+        servo_move(pwm,L_arm_Ch,0,servoCmd)
         
         servoCmd = Rbase_SC_b
-        servoMove(pwm,Rbase_Ch,0,servoCmd)
+        servo_move(pwm,Rbase_Ch,0,servoCmd)
         
         servoCmd = E_arm_SC_b # centered
-        servoMove(pwm,E_arm_Ch,0,servoCmd)
+        servo_move(pwm,E_arm_Ch,0,servoCmd)
 
         servoCmd = Pinc_SC_b # closed
-        servoMove(pwm,Pinc_Ch,0,servoCmd)
+        servo_move(pwm,Pinc_Ch,0,servoCmd)
         
         # TBD - Check with Camera    
         print'Robot Initialized','\n'
 
-def RobotMove_IK():
+def robot_move_IK():
     IK_run = GetInput('(q)uit, (c)ontinue')
 
     if IK_run == 'q':
@@ -311,7 +309,7 @@ def RobotMove_IK():
         return (IK_x,IK_y,IK_z,IK_rot,IK_pinc)
 
 
-def Robot_Move(XC,YC,ZC,RC,PC):
+def robot_move(XC,YC,ZC,RC,PC):
     global Rbase_CurPos,L_arm_CurPos,U_arm_CurPos,E_arm_CurPos,Pinc_CurPos
     
     MoveRobot = True
@@ -363,21 +361,21 @@ def Robot_Move(XC,YC,ZC,RC,PC):
         # Figure out dynamics
         
         # Run movement loop
-        tstep = 10 # number of subdivisions
+        T_step = 10 # number of subdivisions
         T = 10 # Total time for move in seconds
-        t_int = T/tstep
+        T_int = T/T_step
         
         # Make sure Gripper is open
         
         # Move Robot!
         # Calculate step increments (do this all first to speed up movement)
         PolyStep = []
-        for i in range(0,tstep+1):
-            PolyStep.append(Poly345(float(i)/float(tstep))) # Get intermediate steps per Angeles p.236
+        for i in range(0,T_step+1):
+            PolyStep.append(Poly345(float(i)/float(T_step))) # Get intermediate steps per Angeles p.236
         print 'Motion Steps Defined'
         
         # Then move the robot with it    
-        for i in range(0,tstep+1):   
+        for i in range(0,T_step+1):   
             
             s = PolyStep[i]
             
@@ -390,13 +388,13 @@ def Robot_Move(XC,YC,ZC,RC,PC):
             # Command Servos    
             if PiFlag == True:
                 
-                servoMove(pwm,Rbase_Ch,0,Theta_1_j)
-                servoMove(pwm,L_arm_Ch,0,Theta_2_j)
-                servoMove(pwm,U_arm_Ch,0,Theta_3_j)
-                servoMove(pwm,E_arm_Ch,0,Theta_4_j)
+                servo_move(pwm,Rbase_Ch,0,Theta_1_j)
+                servo_move(pwm,L_arm_Ch,0,Theta_2_j)
+                servo_move(pwm,U_arm_Ch,0,Theta_3_j)
+                servo_move(pwm,E_arm_Ch,0,Theta_4_j)
     
             # Then open or close pincer appropriately
-                servoMove(pwm,Pinc_Ch,0,P_command)        
+                servo_move(pwm,Pinc_Ch,0,P_command)        
     
         # Update position
         Rbase_CurPos = Rbase_NewPos
@@ -409,11 +407,11 @@ def Robot_Move(XC,YC,ZC,RC,PC):
     else:
         print ('Invalid move parameters')
 
-def servoMove(ServoName,channel, SetOn, SetOff):
+def servo_move(Servo_Name,Channel, SetOn, SetOff):
     # Move Servo - from Adafruit
-    ServoName.setPWM(channel, int(SetOn), int(SetOff))   # Change speed of continuous servo on channel O
+    Servo_Name.set_pwm(Channel, int(SetOn), int(SetOff))   # Change speed of continuous servo on channel O
     
-def setServoPulse(channel, pulse):
+def setServoPulse(Channel, pulse):
     # Servo setup - from Adafruit
       pulseLength = 1000000                   # 1,000,000 us per second
       pulseLength /= 60                       # 60 Hz
@@ -422,45 +420,45 @@ def setServoPulse(channel, pulse):
       print ("%d us per bit" % pulseLength)
       pulse *= 1000
       pulse /= pulseLength
-      pwm.setPWM(channel, 0, pulse)
+      pwm.set_pwm(Channel, 0, pulse)
 
-def SC_to_Angle(CurPos,b,m):
+def sc_to_angle(CurPos,B,M):
     # Convert servo command to angle (degrees)
-    Angle = (CurPos - b)/m
+    Angle = (CurPos - B)/M
     return Angle
     
 # Convert 2D coordinates
-def ThreeD_conv(P_i,th):
-    th = math.radians(th)
-    RotMax = [[np.cos(th),-np.sin(th),0],[np.sin(th),np.cos(th),0],[0,0,1]]
+def three_d_conv(P_i,Th):
+    Th = math.radians(Th)
+    RotMax = [[np.cos(Th),-np.sin(Th),0],[np.sin(Th),np.cos(Th),0],[0,0,1]]
     P_0 = np.dot(P_i,RotMax)
     return P_0
 
 # Take Picture
-def savePic(CamName,Text):
+def save_picture(Cam_Name,Text):
     # Save picture to Pi desktop
-    CamName.start_preview()
-    CamName.annotate_text = Text
-    CamName.capture(PiDir + Text + '.jpg')
-    CamName.stop_preview()
+    Cam_Name.start_preview()
+    Cam_Name.annotate_text = Text
+    Cam_Name.capture(ImDir + Text + '.jpg')
+    Cam_Name.stop_preview()
 # Image Processing
 
 # Take a picture
-def TakePicture(RollCount):
+def take_picture(Count,Label):
     # Take a picture with the Pi camera and datestamp it
     if PiFlag is True:
         date_now = datetime.now()
         date_now = date_now.strftime('%Y%m%d-%H%M%S')
-        RollSt = str(RollCount)
-        RollStr = RollSt.zfill(int(math.log10(NumRolls)+1)) # add leading zeros to FlipCount
-        PicLabel = RunName + '_' + date_now +'_' + RollStr 
-        savePic(camera,PicLabel)
-        return(PicLabel)
+        Roll_St = str(Count)
+        Roll_Str = Roll_St.zfill(int(math.log10(Num_Rolls)+1)) +'_'+Label # add leading zeros to Count
+        Pic_Label = File_Header + '_' + Roll_Str 
+        save_picture(camera,Pic_Label)
+        return(Pic_Label)
     else:
         print 'Camera routine executed'
         return('null photo')
 # Main Dice flipping loop from Bernoulli Build
-def DiceLoop():
+def Dice_Loop():
     sleep(WaitTime)
     FlipCount=1  
     plateCmd = plateservoMin
@@ -470,7 +468,7 @@ def DiceLoop():
         date_now = date_now.strftime('%Y%m%d-%H%M%S')
         FlipSt = str(FlipCount)
         FlipStr = FlipSt.zfill(int(math.log10(NumFlips)+1)) # add leading zeros to FlipCount
-        PicLabel = RunName + '_' + date_now +'_' + FlipStr 
+        PicLabel = Run_Name + '_' + date_now +'_' + FlipStr 
         savePic(camera,PicLabel)
         # Image processing
         sleep(WaitTime)  
@@ -480,7 +478,7 @@ def DiceLoop():
         else:
             plateCmd = plateservoMin
         #Flip Box now    
-        servoMove(pwm,plate_channel,0,plateCmd)
+        servo_move(pwm,plate_channel,0,plateCmd)
         print(plateCmd)
         sleep(WaitTime) # Let die settle in box
         
@@ -496,135 +494,119 @@ def DiceLoop():
 
 ### Setup
 
-print 'Dice Rolling Machine (Poisson Build)','\n'
+print '\n','Dice Rolling Machine (Poisson Build)','\n'
 
 ## Get run parameters - # flips, die type, etc.
 
-PiFlag = bool(int(GetInput('Pi (1) or PC (0)')))
+PiFlag = bool(int(get_user_input('Pi (1) or PC (0)')))
 print 'Raspberry Pi Enabled:',PiFlag,'\n'
-
-DiceType = GetInput('Dice Type')
-NumRolls = int(GetInput('Number of Flips'))
-DiceNotes = GetInput('Dice Description')
-RunName = GetInput('Run Name')
-FileSave = GetInput ('Save Image Files?')
-
-## Define other parameters
-WaitTime = 2 # Pause before flip
 
 date_now = datetime.now()
 date_now = date_now.strftime('%Y%m%d-%H%M%S')
 
-PCDir="S:\Dave\QH\BBP\Dice Rolling Machine\DRM-Poisson\\"
-PiDir="/home/pi/Desktop/DRM/Images/"
 
-### Initialize Main Loop
+PCDir="S:\Dave\QH\BBP\Dice Rolling Machine\DRM-Poisson\\"
+PiDir="/home/pi/Desktop/DRM/"
+
 ## Raspberry PI only
 if PiFlag is True:
 
-# For imaging on Pi we need this module...
-    import cv2.cv as cv
 # For servo control
-#    import sys
     sys.path.append('/home/pi/Adafruit-Raspberry-Pi-Python-Code/Adafruit_PWM_Servo_Driver')
-    from Adafruit_PWM_Servo_Driver import PWM
+    sys.path.append('/home/pi/Adafruit_PCA9685/PCA9685')
+    #from Adafruit_PWM_Servo_Driver import PWM
+    import Adafruit_PCA9685
     
-# Camera
-    from picamera import PiCamera
-    
-    WKdir = PiDir
+# Define Working Directories
+    WKdir = PiDir    
+    ImDir = PiDir + "Images/"
+    ConDir = PiDir + "Config/"
+#    import cv2.cv as cv # For imaging on Pi we need this module    
+    import cv2 as cv
+    import cv2.cv as cv1
+    from picamera import PiCamera 
+
 # Initialize servos, camera, etc.
-    camera=PiCamera()
-    
+    camera = PiCamera()
     # Initialise the PCA9685 using the default address (0x40).
-    pwm = PWM(0x40)
+    pwm = Adafruit_PCA9685.PCA9685()
     # Note if you'd like more debug output you can instead run:
     #pwm = PWM(0x40, debug=True)
-    
-    pwm.setPWMFreq(60) # Set frequency to 60 Hz
-    
-    ImDir=PiDir+"Images/"
-    ConDir = PiDir + "Config"
+    pwm.set_pwm_freq(60) # Set frequency to 60 Hz
 
 else:
-    ImDir=PCDir+"\Images\\"
+    import cv2 as cv
+    ImDir = PCDir+"\Images\\"
     ConDir = PCDir + "\Config\\"
 
-## Set up reference images and directories
-    
-#file_names = os.listdir(WKdir) # Get list of photo names    
-os.chdir(ImDir)
-file_names = os.listdir(ImDir) # Get list of photo names
-#test_name = 'RevC_100_B_20171014-121945-079.jpg'
-test_name = ImDir+'\\'+'null_20180818-125743_001.jpg'
-#file_names = [test_name]
-#EmptyFile = "RevC_Cal_Empty_01_20171014-094835.jpg"
-#EmptyFile = "Average.jpg"
-#DiceFile = "RevC_100_B_20171014-122503_067.jpg"
+# Get Config File
+Config_File = 'POIS_3_Save.csv'
+print 'Using Configuration File: ',Config_File
+Config = read_csv_to_df(ConDir + Config_File) # Read in Config File   
+Config.set_index('Parameter',inplace = True)  
 
-# Get Ground Truth for run
+Dice_Type = Config.loc['Dice Type']
+Num_Rolls = int(Config.loc['Rolls'])
+Wait_Time = float(Config.loc['Wait Time'])
+Config_Notes = Config.loc['Notes']
+Image_Save =  Config.loc['Image Save']
 
-ConfigFile = 'Ground_Truth.csv'
-Run_df=readcsv(ConDir + ConfigFile) # Read in Config File
+File_Header = Config_File[0:-4] + '_' + date_now
 
-Run_df.set_index('Parameter',inplace = True)
-GT_df=Run_df.drop(Run_df.index[0:6])
-GT_df['Value']=pd.to_numeric(GT_df['Value'])
+print 'File Header for this run:',File_Header
 
-    #GT_df=DHP_df.drop(Run_df.index[0:6])
-    #DHP_df['Value']=pd.to_numeric(DHP_df['Value']
+### Initialize the robot
 
-# First, initialize the robot
-# Robot Configuration
+# Load Robot Configuration File -  DHP and location parameters
 os.chdir(ConDir)
-DHP_file = 'DRM_Sainsmart_DHP.csv'
-DHP_df=readcsv(DHP_file) # Read in Config File
-DHP_df.set_index('Name',inplace = True)
+DHP_File = 'DRM_Sainsmart_DHP.csv'
+DHP = read_csv_to_df(DHP_File) # Read in Config File
+DHP.set_index('Name',inplace = True)
 
 # Zero_Th is the angle in the range of motion of the servo that is defined as zero in the local CS
 
 # Robot Parameters
-Rbase_BC = np.array(DHP_df['Rbase'][9:12]).T
-Rbase_Ch = int(DHP_df['Rbase']['Channel'])
-Rbase_SMin = DHP_df['Rbase'][2]
-Rbase_SMax = DHP_df['Rbase'][3]
+Rbase_BC = np.array(DHP['Rbase'][9:12]).T
+Rbase_Ch = int(DHP['Rbase']['Channel'])
+Rbase_SMin = DHP['Rbase'][2]
+Rbase_SMax = DHP['Rbase'][3]
 
-L_arm_Ch = int(DHP_df['L_arm']['Channel'])
-L_arm_SMin = DHP_df['L_arm'][2]
-L_arm_SMax = DHP_df['L_arm'][3]
-L_arm_X = DHP_df['L_arm'][7]
-L_arm_Z = DHP_df['L_arm'][8]
+L_arm_Ch = int(DHP['L_arm']['Channel'])
+L_arm_SMin = DHP['L_arm'][2]
+L_arm_SMax = DHP['L_arm'][3]
+L_arm_X = DHP['L_arm'][7]
+L_arm_Z = DHP['L_arm'][8]
 
-U_arm_Ch = int(DHP_df['U_arm']['Channel'])
-U_arm_SMin = DHP_df['U_arm'][2]
-U_arm_SMax = DHP_df['U_arm'][3]
-U_arm_X = DHP_df['U_arm'][7]
-U_arm_Z = DHP_df['U_arm'][8]
+U_arm_Ch = int(DHP['U_arm']['Channel'])
+U_arm_SMin = DHP['U_arm'][2]
+U_arm_SMax = DHP['U_arm'][3]
+U_arm_X = DHP['U_arm'][7]
+U_arm_Z = DHP['U_arm'][8]
 
-E_arm_Ch = int(DHP_df['E_arm']['Channel'])
-E_arm_SMin = DHP_df['E_arm'][2]
-E_arm_SMax = DHP_df['E_arm'][3]
-E_arm_X = DHP_df['E_arm'][7]
-E_arm_Z = DHP_df['E_arm'][8]
+E_arm_Ch = int(DHP['E_arm']['Channel'])
+E_arm_SMin = DHP['E_arm'][2]
+E_arm_SMax = DHP['E_arm'][3]
+E_arm_X = DHP['E_arm'][7]
+E_arm_Z = DHP['E_arm'][8]
 
-Pinc_Ch = int(DHP_df['Pinc']['Channel'])
-Pinc_SMin = DHP_df['Pinc'][2]
-Pinc_SMax = DHP_df['Pinc'][3]
-Pinc_X = DHP_df['Pinc'][7]
-Pinc_Z = DHP_df['Pinc'][8]
+Pinc_Ch = int(DHP['Pinc']['Channel'])
+Pinc_SMin = DHP['Pinc'][2]
+Pinc_SMax = DHP['Pinc'][3]
+Pinc_X = DHP['Pinc'][7]
+Pinc_Z = DHP['Pinc'][8]
 
 # Tower Location Data
-Tower_BC = np.array(DHP_df['Tower'][9:12]).T
+Tower_BC = np.array(DHP['Tower'][9:12]).T
 
 # CCS Location Data (Camera Coordinate System)
-Camera_BC = np.array(DHP_df['Camera'][9:12]).T
-CCS_Th = DHP_df['Camera'][4]
+Camera_BC = np.array(DHP['Camera'][9:12]).T
+CCS_Th = DHP['Camera'][4]
 
-# Convert Base coordinates to Robot Base coordinates
+## Convert Base coordinates to Robot Base coordinates
 # Rotation, then translation
-Rbase_rot = ThreeD_conv(Rbase_BC,CCS_Th)
-Camera_rot = ThreeD_conv(Camera_BC,CCS_Th)
-Tower_rot = ThreeD_conv(Tower_BC,CCS_Th)
+Rbase_rot = three_d_conv(Rbase_BC,CCS_Th)
+Camera_rot = three_d_conv(Camera_BC,CCS_Th)
+Tower_rot = three_d_conv(Tower_BC,CCS_Th)
 
 Rbase_RB = Rbase_rot- Rbase_rot
 Camera_RB = Camera_rot - Rbase_rot
@@ -639,25 +621,26 @@ print Tower_RB, '\n'
 # Intercepts are zero servo points (home)
 # Need to put zero-angles in for each CF
 
-Rbase_SC = np.array(DHP_df['Rbase'][0:5]).T
+Rbase_SC = np.array(DHP['Rbase'][0:5]).T
 print 'Rbase Servo Limits: ', Rbase_SC
 
-Rbase_SC_m,Rbase_SC_b = Angle_to_SC(Rbase_SC)
+Rbase_SC_m,Rbase_SC_b = angle_to_sc(Rbase_SC)
 print 'Rbase slope, intercept: ', Rbase_SC_m,Rbase_SC_b,'\n'
 
-L_arm_SC = np.array(DHP_df['L_arm'][0:5]).T
-L_arm_SC_m,L_arm_SC_b = Angle_to_SC(L_arm_SC)
+L_arm_SC = np.array(DHP['L_arm'][0:5]).T
+L_arm_SC_m,L_arm_SC_b = angle_to_sc(L_arm_SC)
 
-U_arm_SC = np.array(DHP_df['U_arm'][0:5]).T
+U_arm_SC = np.array(DHP['U_arm'][0:5]).T
 print 'Uarm Servo Limits: ', U_arm_SC
-U_arm_SC_m,U_arm_SC_b = Angle_to_SC(U_arm_SC)
+
+U_arm_SC_m,U_arm_SC_b = angle_to_sc(U_arm_SC)
 print 'Uarm slope, intercept: ', U_arm_SC_m,U_arm_SC_b,'\n'
 
-E_arm_SC = np.array(DHP_df['E_arm'][0:5]).T
-E_arm_SC_m,E_arm_SC_b = Angle_to_SC(E_arm_SC)
+E_arm_SC = np.array(DHP['E_arm'][0:5]).T
+E_arm_SC_m,E_arm_SC_b = angle_to_sc(E_arm_SC)
 
-Pinc_SC = np.array(DHP_df['Pinc'][0:5]).T
-Pinc_SC_m,Pinc_SC_b = Angle_to_SC(Pinc_SC)
+Pinc_SC = np.array(DHP['Pinc'][0:5]).T
+Pinc_SC_m,Pinc_SC_b = angle_to_sc(Pinc_SC)
 
 # Intercept_Servo is the zero angle for all servos
 Intercept_Servo = [Rbase_SC_b,L_arm_SC_b,U_arm_SC_b,E_arm_SC_b,Pinc_SC_b]
@@ -666,7 +649,7 @@ Intercept_Servo = [Rbase_SC_b,L_arm_SC_b,U_arm_SC_b,E_arm_SC_b,Pinc_SC_b]
 print 'Intercept Servo Location: ',Intercept_Servo
 
 # Home the Robot
-RobotHome()
+robot_home()
 
 ## TBD - Put die away
 
@@ -678,11 +661,11 @@ E_arm_CurPos = E_arm_SC_b
 Pinc_CurPos = Pinc_SC_b
 
 # Convert to angles and get FK
-Th_rb = SC_to_Angle(Rbase_CurPos, Rbase_SC_b, Rbase_SC_m)
-Th_la = SC_to_Angle(L_arm_CurPos, L_arm_SC_b, L_arm_SC_m)
-Th_ua = SC_to_Angle(U_arm_CurPos, U_arm_SC_b, U_arm_SC_m)
-Th_ea = SC_to_Angle(E_arm_CurPos, E_arm_SC_b, E_arm_SC_m)
-Th_pc = SC_to_Angle(Pinc_CurPos, Pinc_SC_b, Pinc_SC_m)
+Th_rb = sc_to_angle(Rbase_CurPos, Rbase_SC_b, Rbase_SC_m)
+Th_la = sc_to_angle(L_arm_CurPos, L_arm_SC_b, L_arm_SC_m)
+Th_ua = sc_to_angle(U_arm_CurPos, U_arm_SC_b, U_arm_SC_m)
+Th_ea = sc_to_angle(E_arm_CurPos, E_arm_SC_b, E_arm_SC_m)
+Th_pc = sc_to_angle(Pinc_CurPos, Pinc_SC_b, Pinc_SC_m)
 
 print 'CurPos Angles: ',math.degrees(Th_rb),math.degrees(Th_la),math.degrees(Th_ua),'\n'
 
@@ -696,7 +679,7 @@ print 'Current Servo Commands:', Rbase_CurPos, L_arm_CurPos, U_arm_CurPos, '\n'
 # input desired EE location in RB coordinates (get from camera)
 
 #Initial Robot Position
-X_command = 00.0
+X_command = 0.0
 Y_command = 17.0
 Z_command = 0.0
 R_command = 0
@@ -704,12 +687,12 @@ P_command = 30
 
 Th1,Th2,Th3 = IK_Calc(X_command,Y_command,Z_command)
 
-print ('Initial IK angles (degrees):',Th1,Th2,Th3)
+print 'Initial IK angles (degrees):',Th1,Th2,Th3
 
 FK = For_Kin(L_arm_X,L_arm_Z,U_arm_X,E_arm_X,E_arm_Z,Pinc_Z,Th1,Th2,Th3)
 
 ## The robot should be out of frame at this point, so take a picture
-EmptyFrame = TakePicture(0) # return filename
+EmptyFrame = take_picture(0,'Empty') # return filename
 
 # Do some imaging on this picture to determine center of frame
 # Then transform into robot coordinates to use below
@@ -717,7 +700,7 @@ EmptyFrame = TakePicture(0) # return filename
 
 ## Next, move the robot to the center of the camera field and take a picture
 #Robot_Move()# Insert frame center coordinates here
-CRFrame = TakePicture(0) # return filename
+CRFrame = take_picture(0,'Robot') # return filename
 
 # eventually do robot parameter correction here, but hopefully it's close enough for now....
 
@@ -738,40 +721,44 @@ cont = 'y'
 # Move 3: Move to tower
 
 ### Main Rolling Loop
-RollCount = 0
 
 print 'Starting Rolls'
-RollCount = 1
-while RollCount <= NumRolls:
-# 1. Take null picture and do validity checks
+Roll_Count = 1
 
-    NullPhoto = TakePicture(RollCount)
-# 2. Register points
+while Roll_Count <= Num_Rolls:
+    # 1. Take null picture and do validity checks
+    Null_Photo = take_picture(Roll_Count,'Null')
     
-# 3. Drop die
+    # 2. Register points - TBD
+    # 3. Drop die
     if PiFlag is True:
         servoCmd = Pinc_SMax
-        servoMove(pwm,Pinc_Ch,0,servoCmd)
+        servo_move(pwm,Pinc_Ch,0,servoCmd)
 
-# 4. Take a picture of it
-    DiePhoto = TakePicture(RollCount)
+    # 4. Take a picture of it
+        Null_Input= get_user_input('Place die and continue')
+        Roll_Photo = take_picture(Roll_Count,'Die')
+        
+    # 5. Go image it and get pip count (or maybe do this later in batch)
+        Diff_Photo = get_diff_image(Null_Photo,Roll_Photo) 
     
-# 5. Go image it and get pip count (or maybe do this later in batch)
-    Pips = Get_Pips(DiePhoto,'null')
-# 6. Log result
-# 7. Calculate die orientation
-# 8. Plan motion path
-# 9. Execute motion to pick up die and return to tower
+    Contour_Data = get_contours('diff21.jpg')
+    print 'Estimated Pip Count:', Contour_Data[3]
+    # 6. Log result
+    # 7. Calculate die orientation
+    # 8. Plan motion path
+    # 9. Execute motion to pick up die and return to tower
 
-# Repeat unless error flag is thrown or run is over
+    # Repeat unless error flag is thrown or run is over
 
-    print 'Roll ',RollCount,' of ',NumRolls, 'successfully completed'
+    print 'Roll',Roll_Count,'of',Num_Rolls, 'successfully completed'
     # Elapsed time per roll?
-    RollCount = RollCount+1    
-#RobotEx()
+    Roll_Count = Roll_Count + 1
+    
+# robot_ex()
 
 # When all done with runs, go to data reduction
-cont = GetInput('Continue to data reduction (y/n)?')
+cont = get_user_input('Continue to data reduction (y/n)?')
 if cont <>'y':
     exit('Program Aborted')
 
@@ -842,7 +829,7 @@ plt.xlabel('Difference')
 plt.ylabel('count')
 plt.title('Histogram of Difference')
 #plt.text(2, .75, r'$\mu=100,\ \sigma=15$')
-plt.axis([-6, 6, 0, NumRolls])
+plt.axis([-6, 6, 0, Num_Rolls])
 plt.grid(True)
 plt.show()
 
