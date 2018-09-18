@@ -52,16 +52,13 @@ def Angle_to_SC(SC_Vec):
 def Get_Loc(filename):
 
     default_file =  'S:\\Dave\\QH\\BBP\\Dice Rolling Machine\\DRM-Poisson\\Images\\diff21.jpg'
-
     src = cv.imread(filename, cv.IMREAD_GRAYSCALE)
     src_col = cv.imread(filename)
     
     # Check if image is loaded fine
     if src is None:
-        print ('Error opening image!')
-        print ('Usage: hough_lines.py [image_name -- default ' + default_file + '] \n')
-    #    return -1
-    
+        print 'Error opening image!'
+
     # Contours
     retval, threshold = cv.threshold(src,60, 255, cv.THRESH_BINARY)  
     srcc, contours, hierarchy = cv.findContours(threshold,cv.RETR_TREE,cv.CHAIN_APPROX_SIMPLE)
@@ -85,7 +82,7 @@ def Get_Loc(filename):
                 cy = int(M['m01']/M['m00'])
                 print 'Centroid:',cx,cy
                 
-                #Find angle
+                # Find angle
                 rect = cv.minAreaRect(cnt)
                 box = cv.boxPoints(rect)
                 box = np.int0(box)
@@ -244,6 +241,59 @@ def IK_Calc(XB,YB,ZB):
     Theta3_IK_d = math.degrees(Theta3_IK)
     
     return Theta1_IK_d,Theta2_IK_d,Theta3_IK_d
+
+def Get_Pips(argv,av2):
+# https://docs.opencv.org/master/d4/d70/tutorial_hough_circle.html
+    filename = argv
+    default_file = 'default_file'
+    # Loads an image
+    src = cv2.imread(filename, cv2.IMREAD_COLOR)
+    #src = av2  
+    # Check if image is loaded fine
+    if src is None:
+        print ('Error opening image!')
+        print ('Usage: hough_circle.py [image_name -- default ' + default_file + '] \n')
+        return -1
+    
+    retval, threshold = cv2.threshold(src,15, 255, cv2.THRESH_BINARY)   
+    blur = cv2.medianBlur(threshold, 9)
+    gray = cv2.cvtColor(blur, cv2.COLOR_BGR2GRAY)
+
+    rows = gray.shape[0]
+    print ('Rows:',rows)
+
+    if PiFlag is True:
+        # Use version of OpenCV that works on PI
+        circles = cv2.HoughCircles(gray, cv.CV_HOUGH_GRADIENT, 1, rows / 200,
+                               param1=100, param2=11 ,
+                               minRadius=2, maxRadius=9)
+    else:
+        circles = cv2.HoughCircles(gray, cv2.HOUGH_GRADIENT, 1, rows / 200,
+                               param1=100, param2=11 ,
+                               minRadius=2, maxRadius=9)
+
+    # Default is 100,30,15,30
+    Pips=0
+   # print (len(circles))
+    if circles is not None:
+        circles = np.uint16(np.around(circles))
+        for i in circles[0, :]:
+            center = (i[0], i[1])
+            # circle center
+            cv2.circle(src, center, 1, (0, 100, 100), 3)
+            # circle outline
+            radius = i[2]
+            cv2.circle(src, center, radius, (255, 0, 255), 3)
+            Pips=len(circles[0,:,:])
+    else:
+        Pips==0
+    
+    cv2.imshow('Threshold', gray )        
+    cv2.imshow("detected circles", src)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+    
+    return Pips
 
 def Poly345(tau):
     # 5th-order polynomial fit from Angeles
@@ -507,7 +557,6 @@ DiceType = GetInput('Dice Type')
 NumRolls = int(GetInput('Number of Flips'))
 DiceNotes = GetInput('Dice Description')
 RunName = GetInput('Run Name')
-FileSave = GetInput ('Save Image Files?')
 
 ## Define other parameters
 WaitTime = 2 # Pause before flip
@@ -810,19 +859,16 @@ for filename in file_names:
     
 # Sort by name
 pc=collections.OrderedDict(sorted(pc.items()))
-GT_df['Run_Results']=pc.values()
+GT_df['Run Results']=pc.values()
 
-Bad_Runs = len(GT_df[GT_df.Run_Results==-100])
-print 'Bad runs:',Bad_Runs
+Bad_Run = len(GT_df[GT_dfs[1]]='-1')
 
-GT_df['Difference']=GT_df['Value']-GT_df['Run_Results']
+print 'Bad runs:',Bad_Run
 
-# Get rid of bad runs
-GT_df = GT_df.loc[GT_df['Run_Results']>0]
-
+GT_df['Difference']=GT_df['Value']-GT_df['Run Results']
 #Plot histogram
 
-n, bins, patches = plt.hist([GT_df['Value'],GT_df['Run_Results']], \
+n, bins, patches = plt.hist([GT_df['Value'],GT_df['Run Results']], \
     bins=[0,1,2,3,4,5,6,7], normed=1, color=['g','b'], alpha=0.75, \
     rwidth=0.5, align='left',cumulative=False)
 
@@ -842,7 +888,7 @@ plt.xlabel('Difference')
 plt.ylabel('count')
 plt.title('Histogram of Difference')
 #plt.text(2, .75, r'$\mu=100,\ \sigma=15$')
-plt.axis([-6, 6, 0, NumRolls])
+plt.axis([-6, 6, 0, 100])
 plt.grid(True)
 plt.show()
 
