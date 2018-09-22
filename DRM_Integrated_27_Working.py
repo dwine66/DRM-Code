@@ -23,6 +23,11 @@ import sys
 import csv
 import collections
 import pprint as pp
+from datetime import datetime
+import time
+from time import sleep
+
+print 'Basic libraries loaded'
 
 import scipy
 import numpy as np
@@ -31,14 +36,13 @@ import matplotlib.pyplot as plt
 #import pandas_datareader as pdr
 #import matplotlib as plt
 
-from datetime import datetime
-import time
-from time import sleep
+print 'Math libraries loaded'
 
 from PIL import Image, ImageChops, ImageOps,ImageEnhance
 from skimage import data, color, exposure
 from skimage.util import img_as_ubyte, img_as_float
 
+print 'Image libraries loaded'
 ### Functions
 
 def angle_to_sc(SC_Vec):
@@ -57,11 +61,12 @@ def get_contours(File_Name):
     # Check if image is loaded fine
     if src is None:
         print ('Error opening image!')
-        src = default_file
+        print ('Usage: hough_lines.py [image_name -- default ' + default_file + '] \n')
+    #    return -1
     
     # Contours
     retval, threshold = cv.threshold(src,60, 255, cv.THRESH_BINARY)  
-    srcc, contours, hierarchy = cv.findContours(threshold,cv.RETR_TREE,cv.CHAIN_APPROX_SIMPLE)
+    contours, hierarchy = cv.findContours(threshold,cv.RETR_TREE,cv.CHAIN_APPROX_SIMPLE)
         
     # from https://www.quora.com/How-I-detect-rectangle-using-OpenCV
     C_count=0
@@ -77,17 +82,17 @@ def get_contours(File_Name):
                 S_count = S_count+1
 
                 # Find centroid
-                M=cv.moments(cnt)
-                cx = int(M['m10']/M['m00'])
-                cy = int(M['m01']/M['m00'])
-                print 'Centroid:',cx,cy
+                M = cv.moments(cnt)
+                Centroid_X = int(M['m10']/M['m00'])
+                Centroid_Y = int(M['m01']/M['m00'])
+                print 'Centroid:',Centroid_X, Centroid_Y
                 
                 #Find angle
                 rect = cv.minAreaRect(cnt)
-                box = cv.boxPoints(rect)
+                box = cv.cv.BoxPoints(rect)
                 box = np.int0(box)
                 print 'Bounding Box Coordinates:',box
-                cv.drawContours(src_col,[box],0,(0,128,255),1)
+                cv.drawContours(src_col,[box],0,(255,128,128),1)
                 try:
                     slope = (box[1][1]-box[0][1])/(box[1][0]-box[0][0])
                 except:
@@ -99,11 +104,11 @@ def get_contours(File_Name):
             elif len(approx) > 4:
                 #area=cv.contourArea(cnt)
                 x,y,w,h = cv.boundingRect(cnt)
-                aspect_ratio = float(w)/float(h)
+                aspect_ratio = float(w) / float(h)
                 print 'Aspect Ratio: ',aspect_ratio
-                if abs(aspect_ratio - 1) < 0.2: #check to see if it's really a circle
+                if abs(aspect_ratio - 1) < 0.2: # check to see if it's really a circle
                     print "circle"
-                    C_count= C_count+1
+                    C_count= C_count + 1
                     cv.drawContours(src_col,[cnt],0,(0,255,255),2)
                     
                 else:
@@ -115,21 +120,24 @@ def get_contours(File_Name):
 
             cv.imshow("Contours", src_col)
             cv.waitKey()
+            sleep(1)
 
         else:
             print 'contour length tiny - ignored (in orange)'
             cv.drawContours(src_col,[cnt],0,(0,128,255),8)
             
-    cv.waitKey()
+    # cv.waitKey()
+    print'completed image analysis'
+    sleep(3)
     cv.destroyAllWindows()
     
     if S_count != 1:
-        cx=0
-        cy=0
+        Centroid_X = 0
+        Centroid_Y = 0
         Die_Angle=0
-        C_count=-1
+        C_count=-100
             
-    return (cx,cy,Die_Angle,C_count,S_count)
+    return (Centroid_X,Centroid_Y,Die_Angle,C_count,S_count)
 
 def get_diff_image(Null_File,Roll_File):
     img1=Image.open(ImDir + Null_File + '.jpg')
@@ -259,14 +267,14 @@ def read_csv_to_df(filename):
     
 def robot_ex():
     # Simple manual single-channel robot command function
-    R_cmd = int(GetInput('Earm(0), Larm(1), Pinc(2), Rbase(3), Uarm(4),quit(5)'))
+    R_cmd = int(get_user_input('Earm(0), Larm(1), Pinc(2), Rbase(3), Uarm(4),quit(5)'))
 
     if R_cmd == 5:
           print('abort')
           return
     else:
           print(R_cmd)
-          R_pos = int(GetInput('Servo PWM value (150 - 600)'))
+          R_pos = int(get_user_input('Servo PWM value (150 - 600)'))
           servo_move(pwm,R_cmd,0,R_pos)
           return
  
@@ -292,7 +300,7 @@ def robot_home():
         print'Robot Initialized','\n'
 
 def robot_move_IK():
-    IK_run = GetInput('(q)uit, (c)ontinue')
+    IK_run = get_user_input('(q)uit, (c)ontinue')
 
     if IK_run == 'q':
           print('abort')
@@ -516,16 +524,16 @@ if PiFlag is True:
     sys.path.append('/home/pi/Adafruit_PCA9685/PCA9685')
     #from Adafruit_PWM_Servo_Driver import PWM
     import Adafruit_PCA9685
-    
+    print 'Adafruit loaded'
 # Define Working Directories
     WKdir = PiDir    
-    ImDir = PiDir + "Images/"
+    ImDir = PiDir+"Images/"
     ConDir = PiDir + "Config/"
-#    import cv2.cv as cv # For imaging on Pi we need this module    
+ #   import cv2.cv as cv # For imaging on Pi we need this module    
     import cv2 as cv
-    import cv2.cv as cv1
+   #   import cv2.cv as cv1
     from picamera import PiCamera 
-
+    print 'opencv and camera loaded'
 # Initialize servos, camera, etc.
     camera = PiCamera()
     # Initialise the PCA9685 using the default address (0x40).
@@ -533,7 +541,7 @@ if PiFlag is True:
     # Note if you'd like more debug output you can instead run:
     #pwm = PWM(0x40, debug=True)
     pwm.set_pwm_freq(60) # Set frequency to 60 Hz
-
+    print 'Adafruit initialized'
 else:
     import cv2 as cv
     ImDir = PCDir+"\Images\\"
@@ -649,7 +657,7 @@ Intercept_Servo = [Rbase_SC_b,L_arm_SC_b,U_arm_SC_b,E_arm_SC_b,Pinc_SC_b]
 print 'Intercept Servo Location: ',Intercept_Servo
 
 # Home the Robot
-robot_home()
+#robot_home()
 
 ## TBD - Put die away
 
@@ -679,9 +687,9 @@ print 'Current Servo Commands:', Rbase_CurPos, L_arm_CurPos, U_arm_CurPos, '\n'
 # input desired EE location in RB coordinates (get from camera)
 
 #Initial Robot Position
-X_command = 0.0
-Y_command = 17.0
-Z_command = 0.0
+X_command = 0
+Y_command = 8.0
+Z_command = 5.0
 R_command = 0
 P_command = 30 
 
@@ -699,7 +707,9 @@ EmptyFrame = take_picture(0,'Empty') # return filename
 # Also maybe get die coordinates
 
 ## Next, move the robot to the center of the camera field and take a picture
-#Robot_Move()# Insert frame center coordinates here
+
+
+robot_move(X_command, Y_command,Z_command,R_command,P_command)# Insert frame center coordinates here
 CRFrame = take_picture(0,'Robot') # return filename
 
 # eventually do robot parameter correction here, but hopefully it's close enough for now....
@@ -726,24 +736,27 @@ print 'Starting Rolls'
 Roll_Count = 1
 
 while Roll_Count <= Num_Rolls:
+    robot_ex()
     # 1. Take null picture and do validity checks
     Null_Photo = take_picture(Roll_Count,'Null')
     
-    # 2. Register points - TBD
+    # 2. Register points
+    Null_Input= get_user_input('Place die and continue')
+    
     # 3. Drop die
     if PiFlag is True:
         servoCmd = Pinc_SMax
         servo_move(pwm,Pinc_Ch,0,servoCmd)
 
     # 4. Take a picture of it
-        Null_Input= get_user_input('Place die and continue')
-        Roll_Photo = take_picture(Roll_Count,'Die')
+    Roll_Photo = take_picture(Roll_Count,'Die')
         
     # 5. Go image it and get pip count (or maybe do this later in batch)
-        Diff_Photo = get_diff_image(Null_Photo,Roll_Photo) 
-    
+    Diff_Photo = get_diff_image(Null_Photo,Roll_Photo)   
     Contour_Data = get_contours('diff21.jpg')
-    print 'Estimated Pip Count:', Contour_Data[3]
+    print 'Pips for Roll#',Roll_Count,':',Contour_Data[3]
+    
+
     # 6. Log result
     # 7. Calculate die orientation
     # 8. Plan motion path
@@ -751,11 +764,11 @@ while Roll_Count <= Num_Rolls:
 
     # Repeat unless error flag is thrown or run is over
 
-    print 'Roll',Roll_Count,'of',Num_Rolls, 'successfully completed'
+    print 'Roll ',Roll_Count,' of ',Num_Rolls, 'successfully completed'
     # Elapsed time per roll?
     Roll_Count = Roll_Count + 1
-    
-# robot_ex()
+
+    # robot_ex()
 
 # When all done with runs, go to data reduction
 cont = get_user_input('Continue to data reduction (y/n)?')
