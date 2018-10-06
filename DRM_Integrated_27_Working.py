@@ -669,8 +669,10 @@ print 'Please Zero positions of Rbase, L_arm, and U_arm','\n'
 # Force user to set position before proceeding
 print 'Current Servo Commands:', Rbase_CurPos, L_arm_CurPos, U_arm_CurPos, '\n'
 
-print 'Please tweak robot servo parameters now'
-robot_tweak(PWM)
+if PiFlag ==1:
+
+    print 'Please tweak robot servo parameters now'
+    robot_tweak(PWM)
 
 get_user_input('hit any key to proceed')
 
@@ -693,7 +695,7 @@ print 'Initial IK angles (degrees):',Th1,Th2,Th3
 FK = for_kin(L_arm_X,L_arm_Z,U_arm_X,E_arm_X,E_arm_Z,Pinc_Z,Th1,Th2,Th3)
 
 ## The robot should be out of frame at this point, so take a picture
-EmptyFrame = take_picture(0,'Empty') # return filename
+EmptyFrame = take_picture(0,'Align') # return filename
 
 # Do some imaging on this picture to determine center of frame
 # Then transform into robot coordinates to use below
