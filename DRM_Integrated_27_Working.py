@@ -107,6 +107,109 @@ def for_kin(LAX,LAZ,UAX,EAX,EAZ,PZ,th1,th2,th3):
     print 'Forward Kinematics End Point: ',EndPt[0:3],'\n'
     return EndPt[0:3]
 
+def get_spots(File):
+    
+    img1 = File
+    hsv = cv.cvtColor(img1, cv.COLOR_BGR2HSV)
+    # Color in BGR    
+    lower_red = np.array([139,35,42])
+    upper_red = np.array([255,255,255])
+    
+    mask = cv.inRange(hsv, lower_red, upper_red)
+    res = cv.bitwise_and(img1,img1, mask = mask)
+
+##    cv.imshow('frame',img1)
+##    cv.imshow('mask',mask)
+##    cv.imshow('res',res)
+##    
+##    cv.waitKey()
+##
+##    cv.destroyAllWindows()
+    #mask.save(ImDir+"mask.jpg")
+    return(mask)
+
+def get_refpoints(File_Name):
+    # Gets crop boundaries for dice rolling zone
+    
+    #def main(argv):
+    default_file =  'S:\\Dave\\QH\\BBP\\Dice Rolling Machine\\DRM-Poisson\\Images\\red_tacks_20180930-132252_001.jpg'
+    filename = ImDir+File_Name
+    #filename = argv[0] if len(argv) > 0 else default_file
+    # Loads an image
+    src = cv.imread(filename, cv.IMREAD_GRAYSCALE)
+    src_col = cv.imread(filename)
+    
+    # Check if image is loaded OK
+    if src is None:
+        print ('Error opening image!')
+        print ('Usage: hough_lines.py [image_name -- default ' + default_file + '] \n')
+    #    return -1
+    Cal_Spots = get_spots(src_col)
+    
+    # Contours
+    retval, threshold = cv.threshold(Cal_Spots,60, 255, cv.THRESH_BINARY)  
+    contours, hierarchy = cv.findContours(threshold,cv.RETR_TREE,cv.CHAIN_APPROX_SIMPLE)
+
+    print 'Contours found:',len(contours)
+    Num_Circles = 0
+    Circles =pd.DataFrame(columns=['cnt','cx','cy','Area'])
+    
+    # from https://www.quora.com/How-I-detect-rectangle-using-OpenCV
+    for index, cnt in enumerate(contours):
+        #print 'Contour',index, 'has length',len(cnt)
+        if len(cnt) > 10:
+            approx = cv.approxPolyDP(cnt,0.03*cv.arcLength(cnt,True),True)
+            print 'Approximation Length for index',index,':', len(approx)
+            if len(approx) == 3:
+                print "triangle"
+                cv.drawContours(src_col,[cnt],0,(0,255,0),2)
+            elif len(approx) == 4:
+                print "square"
+                cv.drawContours(src_col,[cnt],0,(255,0,0),2)
+            elif len(approx) > 4:
+                print "circle"
+                Num_Circles += 1
+                cv.drawContours(src_col,[cnt],0,(0,255,255),2)
+                # Find centroid
+                M = cv.moments(cnt)
+                cx = int(M['m10']/M['m00'])
+                cy = int(M['m01']/M['m00'])
+                C_Area = cv.contourArea(cnt)
+                print 'Centroid:',cx,'x, ',cy,'y,','Area:', C_Area, ' pixels'
+
+                if C_Area > 600 and C_Area < 1500 :#and cy < 500 and cx < 700:
+                    rect = cv.minAreaRect(cnt)
+                    box = cv.cv.BoxPoints(rect)
+                    box = np.int0(box)
+                    X_box = int((box[0,0] + box[2,0])/2)
+                    Y_box = int((box[0,1] + box[2,1])/2)
+                    print 'Box Center:',X_box,Y_box
+                    cv.circle(src_col,(X_box,Y_box),4,(255,0,255),2,1)
+                    cv.drawContours(src_col,[box],0,(255,0,255),3)
+                    Circles.loc[Num_Circles] = [index,X_box,Y_box,C_Area]
+                    cv.imshow("Contours", src_col)
+                #print 'contour',index,' is complex - in red'
+                cv.drawContours(src_col,[cnt],0,(0,0,255),1)
+        else:
+            #print 'contour length tiny - ignored (in blue)'
+            cv.drawContours(src_col,[cnt],0,(255,0,0),8)
+    
+    cv.imshow("Contours", src_col)
+            
+    cv.waitKey()
+    cv.destroyAllWindows()
+    print Num_Circles,'Circles Found'
+    print Circles
+    
+    Y_crop_min = 0
+    Y_crop_max = max(Circles['cy'])
+    X_crop_min = min(Circles['cx'])
+    X_crop_max = max(Circles['cx'])
+    
+    Crop_list = [X_crop_min,Y_crop_min, X_crop_max,Y_crop_max]
+    print 'Crop Boundaries:', Crop_list 
+    return(Crop_list)  
+    
 def get_contours(File_Name):
     # Get contours and geometry from image
     File_Name = ImDir+File_Name
@@ -203,12 +306,15 @@ def get_contours(File_Name):
     print 'cx, cy,angle',Centroid_X,Centroid_Y,Die_Angle
     return (Centroid_X,Centroid_Y,Die_Angle,C_count,S_count)
 
-def get_diff_image(Null_File,Roll_File):
+def get_diff_image(Null_File,Roll_File,Crop):
     img1=Image.open(ImDir + Null_File + '.jpg')
     img2=Image.open(ImDir + Roll_File + '.jpg')
     
-    img1=img1.crop((685,50,1006,756))
-    img2=img2.crop((685,50,1006,756))
+    #img1=img1.crop((685,50,1006,756))
+    #img2=img2.crop((685,50,1006,756))
+
+    img1=img1.crop((Crop[0],Crop[1],Crop[2],Crop[3]))
+    img2=img2.crop((Crop[0],Crop[1],Crop[2],Crop[3]))
         
     diff12=ImageChops.subtract(img1,img2)
     diff21=ImageChops.subtract(img2,img1)
@@ -410,7 +516,7 @@ def robot_move(XC,YC,ZC,RC,PC):
             Theta_3_j = int(U_arm_CurPos+(U_arm_NewPos-U_arm_CurPos)*s) 
             Theta_4_j = int(E_arm_CurPos+(E_arm_NewPos-E_arm_CurPos)*s) 
             
-            print 'Motion Step #:',i, Theta_1_j,Theta_2_j,Theta_3_j,Theta_4_j,s #,'\n'
+            print 'Motion Step #:',i, Theta_1_j,Theta_2_j,Theta_3_j,Theta_4_j #,'\n'
             # Command Servos    
             if PiFlag == True:
                 
@@ -437,7 +543,7 @@ def robot_move(XC,YC,ZC,RC,PC):
 def save_picture(Cam_Name,Text):
     # Save picture to Pi desktop
     Cam_Name.start_preview()
-    Cam_Name.annotate_text = Text
+    Cam_Name.annotate_text = ""
     Cam_Name.capture(ImDir + Text + '.jpg')
     Cam_Name.stop_preview()
     
@@ -694,10 +800,14 @@ print 'Initial IK angles (degrees):',Th1,Th2,Th3
 
 FK = for_kin(L_arm_X,L_arm_Z,U_arm_X,E_arm_X,E_arm_Z,Pinc_Z,Th1,Th2,Th3)
 
-## The robot should be out of frame at this point, so take a picture
-EmptyFrame = take_picture(0,'Align') # return filename
+## Move robot out of frame!!
 
-# Do some imaging on this picture to determine center of frame
+#TBD
+
+EmptyFrame = take_picture(0,'Align') # return filename
+EmptyFrame = EmptyFrame+'.jpg'
+print EmptyFrame
+Crop = get_refpoints(EmptyFrame)
 # Then transform into robot coordinates to use below
 # Also maybe get die coordinates
 
@@ -777,7 +887,7 @@ while Roll_Count <= Num_Rolls:
     print 'remove die.....'
         
     # 5. Go image it and get pip count and die location
-    Diff_Photo = get_diff_image(Null_Photo,Roll_Photo)   
+    Diff_Photo = get_diff_image(Null_Photo,Roll_Photo,Crop)   
     Contour_Data = get_contours('diff21.jpg')
     # 6. Log result
     print 'Pips for Roll#',Roll_Count,':',Contour_Data[3]

@@ -15,6 +15,7 @@ import math
 import pprint as pp
 import cv2 as cv
 import numpy as np
+import pandas as pd
 
 def get_spots(File):
     
@@ -78,9 +79,11 @@ srcc, contours, hierarchy = cv.findContours(threshold,cv.RETR_TREE,cv.CHAIN_APPR
 #cv.imshow("Shape ID", src_col)
 print len(contours)
 Num_Circles = 0
+Circles=pd.DataFrame(columns=['cnt','cx','cy','Area'])
+
 # from https://www.quora.com/How-I-detect-rectangle-using-OpenCV
 for index, cnt in enumerate(contours):
-    print 'Contour',index, 'has length',len(cnt)
+    #print 'Contour',index, 'has length',len(cnt)
     if len(cnt) > 10:
         approx = cv.approxPolyDP(cnt,0.03*cv.arcLength(cnt,True),True)
         print 'Approximation Length', len(approx)
@@ -94,33 +97,29 @@ for index, cnt in enumerate(contours):
             print "circle"
             Num_Circles += 1
             cv.drawContours(src_col,[cnt],0,(0,255,255),2)
-        else:
-            print 'contour',index,' is complex - in red'
+                    # Find centroid
+            M = cv.moments(cnt)
+            cx = int(M['m10']/M['m00'])
+            cy = int(M['m01']/M['m00'])
+            C_Area = cv.contourArea(cnt)
+            print 'Centroid:',cx,'x, ',cy,'y'
+            print 'Area:', C_Area, ' pixels'
+            if C_Area > 200 and C_Area < 800 and cy < 500 and cx < 700:
+                
+                rect = cv.minAreaRect(cnt)
+                box = cv.boxPoints(rect)
+                box = np.int0(box)
+                X_box = int((box[0,0] + box[2,0])/2)
+                Y_box = int((box[0,1] + box[2,1])/2)
+                print X_box,Y_box
+                cv.circle(src_col,(X_box,Y_box),4,(128,64,239),2,1)
+                cv.drawContours(src_col,[box],0,(0,128,255),1)
+                Circles.loc[Num_Circles] = [index,X_box,Y_box,C_Area]
+
+            #print 'contour',index,' is complex - in red'
             cv.drawContours(src_col,[cnt],0,(0,0,255),1)
-
-        # Find centroid
-        M=cv.moments(cnt)
-        cx = int(M['m10']/M['m00'])
-        cy = int(M['m01']/M['m00'])
-        print 'Centroid:',cx,cy
-        
-        #Find angle
-        rect = cv.minAreaRect(cnt)
-        box = cv.boxPoints(rect)
-        box = np.int0(box)
-        print box
-        try:
-            slope = (box[1][1]-box[0][1])/(box[1][0]-box[0][0])
-        except:
-            slope = 0.0
-            print 'slope corrected'
-        Die_Angle = math.degrees(math.atan(slope))
-        print 'Angle:' , Die_Angle
-        print 'slope:', slope
-        cv.drawContours(src_col,[box],0,(0,128,255),1)
-
     else:
-        print 'contour length tiny - ignored (in orange)'
+        #print 'contour length tiny - ignored (in orange)'
         cv.drawContours(src_col,[cnt],0,(0,128,255),8)
 
     cv.imshow("Contours", src_col)
@@ -129,3 +128,12 @@ for index, cnt in enumerate(contours):
 cv.waitKey()
 cv.destroyAllWindows()
 print Num_Circles,'Circles Found'
+
+Y_crop_min = 0
+Y_crop_max = max(Circles['cy'])
+X_crop_min = min(Circles['cx'])
+X_crop_max = max(Circles['cx'])
+
+Crop_list = [X_crop_min,Y_crop_min, X_crop_max,Y_crop_max]
+print 'Crop Boundaries:', Crop_list
+                
