@@ -51,7 +51,7 @@ print 'Image libraries loaded'
 ### Functions
 
 def angle_to_sc(SC_Vec):
-    # Converts servo counts to arm angles
+    # Converts arm angles to servo counts
     SC_Vec_m = (float(SC_Vec[2]) - float(SC_Vec[3])) / (float(SC_Vec[0]) - float(SC_Vec[1]) ) 
     SC_Vec_b = float(SC_Vec[2])-SC_Vec_m*(float(SC_Vec[0])-float(SC_Vec[4]))
     return SC_Vec_m,SC_Vec_b # Output is in counts/deg
@@ -384,32 +384,29 @@ def read_csv_to_df(filename):
     df_name = pd.DataFrame(pd.read_csv(filename,na_values='n/a'))
     return df_name
     
-def robot_tweak(PWM):
+def robot_tweak():
     # Simple manual single-channel robot servo command function
-    global Rbase_CurPos,L_arm_CurPos,U_arm_CurPos,E_arm_CurPos,Pinc_CurPos
+    global Rbase_CurPos,L_arm_CurPos,U_arm_CurPos,E_arm_CurPos,Pinc_CurPos,R_Accel,R_Speed
     while get_user_input('Hit y to continue') == 'y':
         
-        R_cmd = int(get_user_input('Earm(0), Larm(1), Pinc(2), Rbase(3), Uarm(4), quit(5), reset(6)'))
-    
-        if R_cmd == 5:
-            print('abort')
-            return
-        elif R_cmd == 6:
+        R_cmd = int(get_user_input('Uarm(1), Larm(2), Pinc(5), Rbase(4), Earm(3), reset(6)'))
+
+        if R_cmd == 6:
             print('reset robot')
-            PWM = robot_init()
+            robot_init()
         else:
             print(R_cmd)
-            R_pos = int(get_user_input('Servo PWM value (150 - 600)'))
-            servo_move(PWM,R_cmd,0,R_pos)
-            if R_cmd == 0:
+            R_pos = int(get_user_input('Input servo value'))
+            servo_move(R_cmd,R_Accel,R_Speed,R_pos)
+            if R_cmd == 3:
                 E_arm_CurPos = R_pos
-            elif R_cmd == 1:
-                L_arm_CurPos = R_pos
             elif R_cmd == 2:
+                L_arm_CurPos = R_pos
+            elif R_cmd == 5:
                 Pinc_CurPos = R_pos          
-            elif R_cmd == 3:
-                Rbase_CurPos = R_pos
             elif R_cmd == 4:
+                Rbase_CurPos = R_pos
+            elif R_cmd == 1:
                 U_arm_CurPos = R_pos
         print E_arm_CurPos,L_arm_CurPos,Pinc_CurPos,Rbase_CurPos,U_arm_CurPos
     return
@@ -432,16 +429,11 @@ def robot_move_IK():
         return (IK_x,IK_y,IK_z,IK_rot,IK_pinc)
 
 def robot_init():
-    # Initialise the PCA9685 using the default address (0x40).
-    Robot = Adafruit_PCA9685.PCA9685()
-    # Note if you'd like more debug output you can instead run:
-    #pwm = PWM(0x40, debug=True)
-    Robot.set_pwm_freq(60) # Set frequency to 60 Hz
-    print 'Adafruit initialized'
-    return (Robot)
+    Servo.close()
+    print 'maestro off'
 
 def robot_move(XC,YC,ZC,RC,PC):
-    global Rbase_CurPos,L_arm_CurPos,U_arm_CurPos,E_arm_CurPos,Pinc_CurPos
+    global Rbase_CurPos,L_arm_CurPos,U_arm_CurPos,E_arm_CurPos,Pinc_CurPos,R_Accel,R_Speed
     
     MoveRobot = True
     
@@ -501,33 +493,48 @@ def robot_move(XC,YC,ZC,RC,PC):
         
         # Move Robot!
         # Calculate step increments (do this all first to speed up movement)
-        PolyStep = []
-        for i in range(0,T_step+1):
-            PolyStep.append(poly_345(float(i)/float(T_step))) # Get intermediate steps per Angeles p.236
-        print 'Motion Steps Defined'
+##        PolyStep = []
+##        for i in range(0,T_step+1):
+##            PolyStep.append(poly_345(float(i)/float(T_step))) # Get intermediate steps per Angeles p.236
+##        print 'Motion Steps Defined'
         
-        # Then move the robot with it    
-        for i in range(0,T_step+1):   
+##        # Then move the robot with it    
+##        for i in range(0,T_step+1):   
+##            
+##            s = PolyStep[i]
+##            
+##            Theta_1_j = int(Rbase_CurPos+(Rbase_NewPos-Rbase_CurPos)*s)
+##            Theta_2_j = int(L_arm_CurPos+(L_arm_NewPos-L_arm_CurPos)*s)
+##            Theta_3_j = int(U_arm_CurPos+(U_arm_NewPos-U_arm_CurPos)*s) 
+##            Theta_4_j = int(E_arm_CurPos+(E_arm_NewPos-E_arm_CurPos)*s) 
+##            
+##            print 'Motion Step #:',i, Theta_1_j,Theta_2_j,Theta_3_j,Theta_4_j #,'\n'
+##            # Command Servos    
+##            if PiFlag == True:
+##                
+##                servo_move(Rbase_Ch,R_Accel,R_Speed, Theta_1_j)
+##                servo_move(L_arm_Ch,R_Accel,R_Speed, Theta_2_j)
+##                servo_move(U_arm_Ch,R_Accel,R_Speed, Theta_3_j)
+##                servo_move(E_arm_Ch,R_Accel,R_Speed, Theta_4_j)
+##
+
+        Theta_1_j = int(Rbase_CurPos+(Rbase_NewPos-Rbase_CurPos))
+        Theta_2_j = int(L_arm_CurPos+(L_arm_NewPos-L_arm_CurPos))
+        Theta_3_j = int(U_arm_CurPos+(U_arm_NewPos-U_arm_CurPos)) 
+        Theta_4_j = int(E_arm_CurPos+(E_arm_NewPos-E_arm_CurPos)) 
             
-            s = PolyStep[i]
+        print 'Moving to:', Theta_1_j,Theta_2_j,Theta_3_j,Theta_4_j #,'\n'
+        # Command Servos    
+        if PiFlag == True:
             
-            Theta_1_j = int(Rbase_CurPos+(Rbase_NewPos-Rbase_CurPos)*s)
-            Theta_2_j = int(L_arm_CurPos+(L_arm_NewPos-L_arm_CurPos)*s)
-            Theta_3_j = int(U_arm_CurPos+(U_arm_NewPos-U_arm_CurPos)*s) 
-            Theta_4_j = int(E_arm_CurPos+(E_arm_NewPos-E_arm_CurPos)*s) 
-            
-            print 'Motion Step #:',i, Theta_1_j,Theta_2_j,Theta_3_j,Theta_4_j #,'\n'
-            # Command Servos    
-            if PiFlag == True:
-                
-                servo_move(PWM,Rbase_Ch,0,Theta_1_j)
-                servo_move(PWM,L_arm_Ch,0,Theta_2_j)
-                servo_move(PWM,U_arm_Ch,0,Theta_3_j)
-                servo_move(PWM,E_arm_Ch,0,Theta_4_j)
+            servo_move(Rbase_Ch,R_Accel,R_Speed, Theta_1_j)
+            servo_move(L_arm_Ch,R_Accel,R_Speed, Theta_2_j)
+            servo_move(U_arm_Ch,R_Accel,R_Speed, Theta_3_j)
+            servo_move(E_arm_Ch,R_Accel,R_Speed, Theta_4_j)
     
         # Then open or close pincer appropriately
         if PiFlag == True:
-                servo_move(PWM,Pinc_Ch,0,Pinc_NewPos)        
+                servo_move(Pinc_Ch,R_Accel,R_Speed,Pinc_NewPos)        
                 print 'Pincer state updated to', Pinc_NewPos,'from', Pinc_CurPos
                 
         # Update position
@@ -536,6 +543,8 @@ def robot_move(XC,YC,ZC,RC,PC):
         U_arm_CurPos = U_arm_NewPos
         E_arm_CurPos = E_arm_NewPos
         Pinc_CurPos = Pinc_NewPos
+        
+        print 'CurPos Positions: ',Rbase_CurPos,L_arm_CurPos,U_arm_CurPos,E_arm_CurPos,Pinc_CurPos
     
     else:
         print ('Invalid move parameters')
@@ -547,21 +556,13 @@ def save_picture(Cam_Name,Text):
     Cam_Name.capture(ImDir + Text + '.jpg')
     Cam_Name.stop_preview()
     
-def servo_move(Servo_Name,Channel, SetOn, SetOff):
-    # Move Servo - from Adafruit
-    Servo_Name.set_pwm(Channel, int(SetOn), int(SetOff))   # Change speed of continuous servo on channel O
+def servo_move(n,a,s,p):
+    Servo.setAccel(n,a)      #set servo n acceleration
+    #print 'set speed'
+    Servo.setSpeed(n,s)     #set speed of servo n
+    print 'moving servo', n
+    Servo.setTarget(n,p)  #set servo n to move to position
     
-def set_servo_pulse(Channel, pulse):
-    # Servo setup - from Adafruit
-      pulseLength = 1000000                   # 1,000,000 us per second
-      pulseLength /= 60                       # 60 Hz
-      print ("%d us per period" % pulseLength)
-      pulseLength /= 4096                     # 12 bits of resolution
-      print ("%d us per bit" % pulseLength)
-      pulse *= 1000
-      pulse /= pulseLength
-      pwm.set_pwm(Channel, 0, pulse)
-
 def sc_to_angle(CurPos,B,M):
     # Convert servo command to angle (degrees)
     Angle = (CurPos - B)/M
@@ -602,6 +603,8 @@ print 'Raspberry Pi Enabled:',PiFlag,'\n'
 date_now = datetime.now()
 date_now = date_now.strftime('%Y%m%d-%H%M%S')
 
+R_Accel = 4
+R_Speed = 4
 
 PCDir="S:\Dave\QH\BBP\Dice Rolling Machine\DRM-Poisson\\"
 PiDir="/home/pi/Desktop/DRM/"
@@ -610,11 +613,11 @@ PiDir="/home/pi/Desktop/DRM/"
 if PiFlag is True:
 
 # For servo control
-    sys.path.append('/home/pi/Adafruit-Raspberry-Pi-Python-Code/Adafruit_PWM_Servo_Driver')
-    sys.path.append('/home/pi/Adafruit_PCA9685/PCA9685')
-    #from Adafruit_PWM_Servo_Driver import PWM
-    import Adafruit_PCA9685
-    print 'Adafruit loaded'
+    sys.path.append('/home/pi/Pololu')
+    import maestro
+    print 'maestro loaded'
+
+
 # Define Working Directories
     WKdir = PiDir    
     ImDir = PiDir+"Images/"
@@ -626,9 +629,13 @@ if PiFlag is True:
     print 'opencv and camera loaded'
 # Initialize servo board and camera
     camera = PiCamera()
-    PWM = robot_init()
+    Servo = maestro.Controller()
 
 else:
+    import maestro
+    Servo = maestro.Controller(22)
+    R_Accel = 4
+    R_Speed = 4
     import cv2 as cv
     ImDir = PCDir+"\Images\\"
     ConDir = PCDir + "\Config\\"
@@ -742,23 +749,33 @@ Pinc_SC_m,Pinc_SC_b = angle_to_sc(Pinc_SC)
 print 'Pinc Servo Limits: ', Pinc_SC
 print 'Pinc slope, intercept: ', Pinc_SC_m,Pinc_SC_b,'\n'
 
+Pinc_Open = DHP['Pinc'][1]
+Pinc_Close = DHP['Pinc'][0]
+Pinc_Grab_Die = Pinc_Open/2
+print 'Pincer Range:',Pinc_Open,Pinc_Close,Pinc_Grab_Die
+
 # Intercept_Servo is the zero angle for all servos
 Intercept_Servo = [Rbase_SC_b,L_arm_SC_b,U_arm_SC_b,E_arm_SC_b,Pinc_SC_b]
 
 # Pinc is not a location - used only to grip/release
 print 'Intercept Servo Location: ',Intercept_Servo
 
-# Home the Robot
-#robot_home()
-
 ## TBD - Put die away
 
 # Initialize Servo Commands
-Rbase_CurPos = 350
-L_arm_CurPos = 350
-U_arm_CurPos = 350
-E_arm_CurPos = 350
-Pinc_CurPos = 250
+servo_move(Rbase_Ch,R_Accel,R_Speed,6000)
+servo_move(L_arm_Ch,R_Accel,R_Speed,6000)
+servo_move(U_arm_Ch,R_Accel,R_Speed,7000)
+servo_move(E_arm_Ch,R_Accel,R_Speed,6112)
+servo_move(Pinc_Ch,R_Accel,R_Speed,4000)
+
+Rbase_CurPos = Servo.getPosition(Rbase_Ch)
+L_arm_CurPos = Servo.getPosition(L_arm_Ch)
+U_arm_CurPos = Servo.getPosition(U_arm_Ch)
+E_arm_CurPos = Servo.getPosition(E_arm_Ch)
+Pinc_CurPos = Servo.getPosition(Pinc_Ch)
+
+print 'CurPos Positions: ',Rbase_CurPos,L_arm_CurPos,U_arm_CurPos,E_arm_CurPos,Pinc_CurPos
 
 # Convert to angles and get FK
 Th_rb = sc_to_angle(Rbase_CurPos, Rbase_SC_b, Rbase_SC_m)
@@ -771,14 +788,14 @@ print 'CurPos Angles: ',math.degrees(Th_rb),math.degrees(Th_la),math.degrees(Th_
 
 FK = for_kin(L_arm_X,L_arm_Z,U_arm_X,E_arm_X,E_arm_Z,Pinc_Z,Th_rb,Th_la,Th_ua)
 
-print 'Please Zero positions of Rbase, L_arm, and U_arm','\n'
+# print 'Please Zero positions of Rbase, L_arm, and U_arm','\n'
 # Force user to set position before proceeding
 print 'Current Servo Commands:', Rbase_CurPos, L_arm_CurPos, U_arm_CurPos, '\n'
 
-if PiFlag ==1:
+if PiFlag == 1:
 
     print 'Please tweak robot servo parameters now'
-    robot_tweak(PWM)
+    robot_tweak()
 
 get_user_input('hit any key to proceed')
 
@@ -790,7 +807,7 @@ X_command = 10
 Y_command = 15
 Z_command = 12
 R_command = 0
-P_command = 3
+P_command = Pinc_Open
 
 R_Die = 0
 
@@ -843,7 +860,7 @@ Roll_Count = 1
 while Roll_Count <= Num_Rolls:
     # Move Robot around if desired
     if get_user_input('Do you want to adjust robot position?') == 'y':
-        robot_tweak(PWM)
+        #robot_tweak()
         Th_rb = sc_to_angle(Rbase_CurPos, Rbase_SC_b, Rbase_SC_m)
         Th_la = sc_to_angle(L_arm_CurPos, L_arm_SC_b, L_arm_SC_m)
         Th_ua = sc_to_angle(U_arm_CurPos, U_arm_SC_b, U_arm_SC_m)
@@ -877,7 +894,7 @@ while Roll_Count <= Num_Rolls:
     
     # 3. Drop die
     if PiFlag is True:
-        P_command = 30
+        P_command = Pinc_Open
         robot_move(X_command, Y_command,Z_command,R_command,P_command)
         print 'Die has been dropped - waiting for roll...'
         
@@ -905,7 +922,7 @@ while Roll_Count <= Num_Rolls:
     X_command = R_x
     Y_command = R_y
     R_command = R_Die
-    P_command = 20
+    P_command = Pinc_Open
     robot_move(X_command, Y_command,Z_command,R_command,P_command)
 
     #Then drop down
@@ -914,7 +931,7 @@ while Roll_Count <= Num_Rolls:
 
     #Then grab it
     print 'grabbing die...'
-    P_command = 3
+    P_command = Pinc_Grab_Die
     robot_move(X_command, Y_command,Z_command,R_command,P_command)    
 
     # Repeat unless error flag is thrown or run is over
