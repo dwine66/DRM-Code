@@ -108,7 +108,7 @@ def for_kin(LAX,LAZ,UAX,EAX,EAZ,PZ,th1,th2,th3):
     return EndPt[0:3]
 
 def get_spots(File):
-    
+    print 'Getting Spots'
     img1 = File
     hsv = cv.cvtColor(img1, cv.COLOR_BGR2HSV)
     # Color in BGR    
@@ -116,24 +116,23 @@ def get_spots(File):
     upper_red = np.array([255,255,255])
     
     mask = cv.inRange(hsv, lower_red, upper_red)
+    print mask
     res = cv.bitwise_and(img1,img1, mask = mask)
 
-##    cv.imshow('frame',img1)
-##    cv.imshow('mask',mask)
-##    cv.imshow('res',res)
-##    
-##    cv.waitKey()
-##
-##    cv.destroyAllWindows()
-    #mask.save(ImDir+"mask.jpg")
+    cv.imshow('frame',img1)
+    cv.imshow('mask',mask)
+    cv.imshow('res',res)  
+    cv.waitKey()
+    cv.destroyAllWindows()
+#   mask.save(ImDir+"mask.jpg")
     return(mask)
 
 def get_refpoints(File_Name):
     # Gets crop boundaries for dice rolling zone
-    
+    print 'Getting reference points..'
     #def main(argv):
-    default_file =  'S:\\Dave\\QH\\BBP\\Dice Rolling Machine\\DRM-Poisson\\Images\\red_tacks_20180930-132252_001.jpg'
-    filename = ImDir+File_Name
+    default_file =  'S:\\Dave\\QH\\BBP\\Dice Rolling Machine\\DRM-Poisson\\Images\\POIS_3_Save_20181021-203930_0_Align.jpg'
+    filename = ImDir + File_Name
     #filename = argv[0] if len(argv) > 0 else default_file
     # Loads an image
     src = cv.imread(filename, cv.IMREAD_GRAYSCALE)
@@ -141,18 +140,23 @@ def get_refpoints(File_Name):
     
     # Check if image is loaded OK
     if src is None:
-        print ('Error opening image!')
-        print ('Usage: hough_lines.py [image_name -- default ' + default_file + '] \n')
-    #    return -1
-    Cal_Spots = get_spots(src_col)
-    
-    # Contours
-    retval, threshold = cv.threshold(Cal_Spots,60, 255, cv.THRESH_BINARY)  
-    contours, hierarchy = cv.findContours(threshold,cv.RETR_TREE,cv.CHAIN_APPROX_SIMPLE)
+        print ('Error opening image - using default file')
+        filename = default_file
+        src_col = cv.imread(filename)
 
+    Cal_Spots = get_spots(src_col)
+    print 'Spots returned'
+    # Contours
+    retval, threshold = cv.threshold(Cal_Spots, 60, 255, cv.THRESH_BINARY)  
+    print 'retval:',retval
+    print 'threshold:',threshold
+    if CV_Ver == '2.4.1.9':
+        contours, hierarchy = cv.findContours(threshold,cv.RETR_TREE,cv.CHAIN_APPROX_SIMPLE)
+    else:
+       srcc,contours, hierarchy = cv.findContours(threshold,cv.RETR_TREE,cv.CHAIN_APPROX_SIMPLE)
     print 'Contours found:',len(contours)
     Num_Circles = 0
-    Circles =pd.DataFrame(columns=['cnt','cx','cy','Area'])
+    Circles = pd.DataFrame(columns=['cnt','cx','cy','Area'])
     
     # from https://www.quora.com/How-I-detect-rectangle-using-OpenCV
     for index, cnt in enumerate(contours):
@@ -179,7 +183,10 @@ def get_refpoints(File_Name):
 
                 if C_Area > 600 and C_Area < 1500 :#and cy < 500 and cx < 700:
                     rect = cv.minAreaRect(cnt)
-                    box = cv.cv.BoxPoints(rect)
+                    if CV_Ver == '2.4.1.9':
+                        box = cv.cv.BoxPoints(rect)
+                    else:
+                        box = cv.boxPoints(rect)
                     box = np.int0(box)
                     X_box = int((box[0,0] + box[2,0])/2)
                     Y_box = int((box[0,1] + box[2,1])/2)
@@ -201,6 +208,7 @@ def get_refpoints(File_Name):
     print Num_Circles,'Circles Found'
     print Circles
     
+    # Define crop boundaries
     Y_crop_min = 0
     Y_crop_max = max(Circles['cy'])
     X_crop_min = min(Circles['cx'])
@@ -226,7 +234,10 @@ def get_contours(File_Name):
     
     # Contours
     retval, threshold = cv.threshold(src,60, 255, cv.THRESH_BINARY)  
-    contours, hierarchy = cv.findContours(threshold,cv.RETR_TREE,cv.CHAIN_APPROX_SIMPLE)
+    if CV_Ver == '2.4.1.9':
+        contours, hierarchy = cv.findContours(threshold,cv.RETR_TREE,cv.CHAIN_APPROX_SIMPLE)
+    else:
+       srcc,contours, hierarchy = cv.findContours(threshold,cv.RETR_TREE,cv.CHAIN_APPROX_SIMPLE)
     print len(contours),'Contours found'       
     # from https://www.quora.com/How-I-detect-rectangle-using-OpenCV
     C_count = 0
@@ -252,7 +263,10 @@ def get_contours(File_Name):
                 
                 #Find angle
                 rect = cv.minAreaRect(cnt)
-                box = cv.cv.BoxPoints(rect)
+                if CV_Ver == '2.4.1.9':
+                    box = cv.cv.BoxPoints(rect)
+                else:
+                    box = cv.boxPoints(rect)
                 box = np.int0(box)
                 print 'Bounding Box Coordinates:',box
                 cv.drawContours(src_col,[box],0,(255,128,128),1)
@@ -384,32 +398,7 @@ def read_csv_to_df(filename):
     df_name = pd.DataFrame(pd.read_csv(filename,na_values='n/a'))
     return df_name
     
-def robot_tweak():
-    # Simple manual single-channel robot servo command function
-    global Rbase_CurPos,L_arm_CurPos,U_arm_CurPos,E_arm_CurPos,Pinc_CurPos,R_Accel,R_Speed
-    while get_user_input('Hit y to continue') == 'y':
-        
-        R_cmd = int(get_user_input('Uarm(1), Larm(2), Pinc(5), Rbase(4), Earm(3), reset(6)'))
 
-        if R_cmd == 6:
-            print('reset robot')
-            robot_init()
-        else:
-            print(R_cmd)
-            R_pos = int(get_user_input('Input servo value'))
-            servo_move(R_cmd,R_Accel,R_Speed,R_pos)
-            if R_cmd == 3:
-                E_arm_CurPos = R_pos
-            elif R_cmd == 2:
-                L_arm_CurPos = R_pos
-            elif R_cmd == 5:
-                Pinc_CurPos = R_pos          
-            elif R_cmd == 4:
-                Rbase_CurPos = R_pos
-            elif R_cmd == 1:
-                U_arm_CurPos = R_pos
-        print E_arm_CurPos,L_arm_CurPos,Pinc_CurPos,Rbase_CurPos,U_arm_CurPos
-    return
 
 def robot_move_IK():
     IK_run = get_user_input('Ready to move robot (y/n)?')
@@ -549,6 +538,33 @@ def robot_move(XC,YC,ZC,RC,PC):
     else:
         print ('Invalid move parameters')
 
+def robot_tweak():
+    # Simple manual single-channel robot servo command function
+    global Rbase_CurPos,L_arm_CurPos,U_arm_CurPos,E_arm_CurPos,Pinc_CurPos,R_Accel,R_Speed
+    while get_user_input('Hit y to continue') == 'y':
+        
+        R_cmd = int(get_user_input('Uarm(1), Larm(2), Pinc(5), Rbase(4), Earm(3), reset(6)'))
+
+        if R_cmd == 6:
+            print('reset robot')
+            robot_init()
+        else:
+            print(R_cmd)
+            R_pos = int(get_user_input('Input servo value'))
+            servo_move(R_cmd,R_Accel,R_Speed,R_pos)
+            if R_cmd == 3:
+                E_arm_CurPos = R_pos
+            elif R_cmd == 2:
+                L_arm_CurPos = R_pos
+            elif R_cmd == 5:
+                Pinc_CurPos = R_pos          
+            elif R_cmd == 4:
+                Rbase_CurPos = R_pos
+            elif R_cmd == 1:
+                U_arm_CurPos = R_pos
+        print E_arm_CurPos,L_arm_CurPos,Pinc_CurPos,Rbase_CurPos,U_arm_CurPos
+    return
+
 def save_picture(Cam_Name,Text):
     # Save picture to Pi desktop
     Cam_Name.start_preview()
@@ -617,7 +633,6 @@ if PiFlag is True:
     import maestro
     print 'maestro loaded'
 
-
 # Define Working Directories
     WKdir = PiDir    
     ImDir = PiDir+"Images/"
@@ -633,13 +648,13 @@ if PiFlag is True:
 
 else:
     import maestro
-    Servo = maestro.Controller(22)
+    #Servo = maestro.Controller(22)
     R_Accel = 4
     R_Speed = 4
     import cv2 as cv
     ImDir = PCDir+"\Images\\"
     ConDir = PCDir + "\Config\\"
-
+CV_Ver = cv.__version__
 # Get Config File
 Config_File = 'POIS_3_Save.csv'
 print 'Using Configuration File: ',Config_File
@@ -763,18 +778,26 @@ print 'Intercept Servo Location: ',Intercept_Servo
 ## TBD - Put die away
 
 # Initialize Servo Commands
-servo_move(Rbase_Ch,R_Accel,R_Speed,6000)
-servo_move(L_arm_Ch,R_Accel,R_Speed,6000)
-servo_move(U_arm_Ch,R_Accel,R_Speed,7000)
-servo_move(E_arm_Ch,R_Accel,R_Speed,6112)
-servo_move(Pinc_Ch,R_Accel,R_Speed,4000)
+if PiFlag == 1:
+    servo_move(Rbase_Ch,R_Accel,R_Speed,6000)
+    servo_move(L_arm_Ch,R_Accel,R_Speed,6000)
+    servo_move(U_arm_Ch,R_Accel,R_Speed,7000)
+    servo_move(E_arm_Ch,R_Accel,R_Speed,6112)
+    servo_move(Pinc_Ch,R_Accel,R_Speed,4000)
 
-Rbase_CurPos = Servo.getPosition(Rbase_Ch)
-L_arm_CurPos = Servo.getPosition(L_arm_Ch)
-U_arm_CurPos = Servo.getPosition(U_arm_Ch)
-E_arm_CurPos = Servo.getPosition(E_arm_Ch)
-Pinc_CurPos = Servo.getPosition(Pinc_Ch)
+    Rbase_CurPos = Servo.getPosition(Rbase_Ch)
+    L_arm_CurPos = Servo.getPosition(L_arm_Ch)
+    U_arm_CurPos = Servo.getPosition(U_arm_Ch)
+    E_arm_CurPos = Servo.getPosition(E_arm_Ch)
+    Pinc_CurPos = Servo.getPosition(Pinc_Ch)
 
+else:
+    Rbase_CurPos = 6000
+    L_arm_CurPos = 6000
+    U_arm_CurPos = 7000
+    E_arm_CurPos = 6112
+    Pinc_CurPos = 4000
+    
 print 'CurPos Positions: ',Rbase_CurPos,L_arm_CurPos,U_arm_CurPos,E_arm_CurPos,Pinc_CurPos
 
 # Convert to angles and get FK
@@ -820,10 +843,11 @@ FK = for_kin(L_arm_X,L_arm_Z,U_arm_X,E_arm_X,E_arm_Z,Pinc_Z,Th1,Th2,Th3)
 ## Move robot out of frame!!
 
 #TBD
-
+## Get reference photo and define rollout area
 EmptyFrame = take_picture(0,'Align') # return filename
 EmptyFrame = EmptyFrame+'.jpg'
-print EmptyFrame
+print 'Using',EmptyFrame,' for reference'
+
 Crop = get_refpoints(EmptyFrame)
 # Then transform into robot coordinates to use below
 # Also maybe get die coordinates
@@ -889,18 +913,22 @@ while Roll_Count <= Num_Rolls:
     # 1. Take null picture and do validity checks
     Null_Photo = take_picture(Roll_Count,'Null')
     print 'Null picture taken'
+    if Null_Photo == 'null photo':
+        Null_Photo = 'POIS_3_Save_20181021-203930_1_Null'
     # 2. Register points
     #Null_Input= get_user_input('Place die and continue')
     
     # 3. Drop die
-    if PiFlag is True:
-        P_command = Pinc_Open
-        robot_move(X_command, Y_command,Z_command,R_command,P_command)
-        print 'Die has been dropped - waiting for roll...'
+    # if PiFlag is True:
+    P_command = Pinc_Open
+    robot_move(X_command, Y_command,Z_command,R_command,P_command)
+    print 'Die has been dropped - waiting for roll...'
         
     # 4. Take a picture of it
     sleep(5)
     Roll_Photo = take_picture(Roll_Count,'Die')
+    if Roll_Photo == 'null photo':
+        Roll_Photo = 'POIS_3_Save_20181021-203930_1_Die'
     print 'remove die.....'
         
     # 5. Go image it and get pip count and die location
