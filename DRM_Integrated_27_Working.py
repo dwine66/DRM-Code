@@ -119,10 +119,10 @@ def get_spots(File):
     print mask
     res = cv.bitwise_and(img1,img1, mask = mask)
 
-    cv.imshow('frame',img1)
-    cv.imshow('mask',mask)
-    cv.imshow('res',res)  
-    cv.waitKey()
+##    cv.imshow('frame',img1)
+##    cv.imshow('mask',mask)
+##    cv.imshow('res',res)  
+##    cv.waitKey()
     cv.destroyAllWindows()
 #   mask.save(ImDir+"mask.jpg")
     return(mask)
@@ -148,13 +148,14 @@ def get_refpoints(File_Name):
     print 'Spots returned'
     # Contours
     retval, threshold = cv.threshold(Cal_Spots, 60, 255, cv.THRESH_BINARY)  
-    print 'retval:',retval
-    print 'threshold:',threshold
-    if CV_Ver == '2.4.1.9':
+    #print 'retval:',retval
+    #print 'threshold:',threshold
+    if CV_Ver == '2.4.9.1':
         contours, hierarchy = cv.findContours(threshold,cv.RETR_TREE,cv.CHAIN_APPROX_SIMPLE)
     else:
        srcc,contours, hierarchy = cv.findContours(threshold,cv.RETR_TREE,cv.CHAIN_APPROX_SIMPLE)
     print 'Contours found:',len(contours)
+    
     Num_Circles = 0
     Circles = pd.DataFrame(columns=['cnt','cx','cy','Area'])
     
@@ -163,9 +164,9 @@ def get_refpoints(File_Name):
         #print 'Contour',index, 'has length',len(cnt)
         if len(cnt) > 10:
             approx = cv.approxPolyDP(cnt,0.03*cv.arcLength(cnt,True),True)
-            print 'Approximation Length for index',index,':', len(approx)
+            #print 'Approximation Length for index',index,':', len(approx)
             if len(approx) == 3:
-                print "triangle"
+                #print "triangle"
                 cv.drawContours(src_col,[cnt],0,(0,255,0),2)
             elif len(approx) == 4:
                 print "square"
@@ -181,20 +182,36 @@ def get_refpoints(File_Name):
                 C_Area = cv.contourArea(cnt)
                 print 'Centroid:',cx,'x, ',cy,'y,','Area:', C_Area, ' pixels'
 
-                if C_Area > 600 and C_Area < 1500 :#and cy < 500 and cx < 700:
+                if C_Area > 600 and C_Area < 1500:
+
                     rect = cv.minAreaRect(cnt)
-                    if CV_Ver == '2.4.1.9':
+                    if CV_Ver == '2.4.9.1':
                         box = cv.cv.BoxPoints(rect)
                     else:
                         box = cv.boxPoints(rect)
                     box = np.int0(box)
+                    print box
                     X_box = int((box[0,0] + box[2,0])/2)
                     Y_box = int((box[0,1] + box[2,1])/2)
                     print 'Box Center:',X_box,Y_box
+                    
+                    L_box_1 = math.hypot(box[0,0]-box[1,0],box[0,1]-box[1,1])
+                    L_box_2 = math.hypot(box[1,0]-box[2,0],box[1,1]-box[2,1])
+                    AR = L_box_1/L_box_2
+                    print 'Aspect Ratio', AR
+                    
+                    X_abs = float(Y_box)/ImScale - Im_bias_Y
+                    Y_abs = float(X_box)/ImScale - Im_bias_X
+                    print 'location in robot CS: ',X_abs,Y_abs
+                    
                     cv.circle(src_col,(X_box,Y_box),4,(255,0,255),2,1)
                     cv.drawContours(src_col,[box],0,(255,0,255),3)
-                    Circles.loc[Num_Circles] = [index,X_box,Y_box,C_Area]
-                    cv.imshow("Contours", src_col)
+                    if abs(AR-1) < 0.05:
+                        print '\n','Found Reference Point','\n'                     
+                        Circles.loc[Num_Circles] = [index,X_box,Y_box,C_Area]
+                        
+                    #cv.imshow("Contours", src_col)
+                    #cv.waitKey()                    
                 #print 'contour',index,' is complex - in red'
                 cv.drawContours(src_col,[cnt],0,(0,0,255),1)
         else:
@@ -202,54 +219,58 @@ def get_refpoints(File_Name):
             cv.drawContours(src_col,[cnt],0,(255,0,0),8)
     
     cv.imshow("Contours", src_col)
-            
+
+    # Define crop boundaries
+    Y_crop_min = 0
+    Y_crop_max = int(max(Circles['cy'])) - 20
+    X_crop_min = int(min(Circles['cx'])) + 20
+    X_crop_max = int(max(Circles['cx'])) - 20
+    
+    Crop_list = [X_crop_min,Y_crop_min, X_crop_max,Y_crop_max]
+    print 'Crop Boundaries:', Crop_list 
+    cv.rectangle(src_col,(X_crop_min,Y_crop_min),(X_crop_max,Y_crop_max),(255,255,255),2,4)
+    cv.imshow("Contours", src_col)
+    
     cv.waitKey()
     cv.destroyAllWindows()
     print Num_Circles,'Circles Found'
     print Circles
-    
-    # Define crop boundaries
-    Y_crop_min = 0
-    Y_crop_max = max(Circles['cy'])
-    X_crop_min = min(Circles['cx'])
-    X_crop_max = max(Circles['cx'])
-    
-    Crop_list = [X_crop_min,Y_crop_min, X_crop_max,Y_crop_max]
-    print 'Crop Boundaries:', Crop_list 
-    return(Crop_list)  
+
+    return(Circles,Crop_list)  
     
 def get_contours(File_Name):
     # Get contours and geometry from image
-    File_Name = ImDir+File_Name
+    File_Name = ImDir + File_Name
     default_file =  'S:\\Dave\\QH\\BBP\\Dice Rolling Machine\\DRM-Poisson\\Images\\diff21.jpg'
     print 'Filename used:',File_Name
     src = cv.imread(File_Name, cv.IMREAD_GRAYSCALE)
     src_col = cv.imread(File_Name)
     
-    # Check if image is loaded fine
+    # Check if image loaded OK
     if src is None:
-        print ('Error opening image!')
-        print ('Usage: hough_lines.py [image_name -- default ' + default_file + '] \n')
-    #    return -1
+        print ('Error opening image! Opening ' + default_file + '] \n')
     
     # Contours
     retval, threshold = cv.threshold(src,60, 255, cv.THRESH_BINARY)  
-    if CV_Ver == '2.4.1.9':
-        contours, hierarchy = cv.findContours(threshold,cv.RETR_TREE,cv.CHAIN_APPROX_SIMPLE)
+    
+    if CV_Ver == '2.4.9.1':
+       contours, hierarchy = cv.findContours(threshold,cv.RETR_TREE,cv.CHAIN_APPROX_SIMPLE)
     else:
        srcc,contours, hierarchy = cv.findContours(threshold,cv.RETR_TREE,cv.CHAIN_APPROX_SIMPLE)
+    
     print len(contours),'Contours found'       
     # from https://www.quora.com/How-I-detect-rectangle-using-OpenCV
-    C_count = 0
-    S_count = 0
+    C_count = 0 # Circle count
+    S_count = 0 # Square count
     
     for index, cnt in enumerate(contours):
 
-        print 'Contour',index, 'has length',len(cnt)
+        #print 'Contour',index, 'has length',len(cnt)
         if len(cnt) > 10:
             approx = cv.approxPolyDP(cnt,0.03*cv.arcLength(cnt,True),True)
-            print 'Approximation Length', len(approx)
-            if len(approx)==4:
+            #print 'Approximation Length', len(approx)
+            # Find a square
+            if len(approx) == 4:
                 print "Square"
                 cv.drawContours(src_col,[cnt],0,(255,0,0),2)
                 S_count = S_count+1
@@ -260,16 +281,18 @@ def get_contours(File_Name):
                 Centroid_Y = int(M['m10']/M['m00'])
                 Centroid_X = int(M['m01']/M['m00'])
                 print 'Centroid:',Centroid_X, Centroid_Y
+                cv.circle(src_col,(Centroid_Y,Centroid_X),4,(255,128,128),2,1)
                 
                 #Find angle
                 rect = cv.minAreaRect(cnt)
-                if CV_Ver == '2.4.1.9':
+                if CV_Ver == '2.4.9.1':
                     box = cv.cv.BoxPoints(rect)
                 else:
                     box = cv.boxPoints(rect)
                 box = np.int0(box)
                 print 'Bounding Box Coordinates:',box
                 cv.drawContours(src_col,[box],0,(255,128,128),1)
+
                 try:
                     slope = float(float(box[1][1]-box[0][1])/float(box[1][0]-box[0][0]))
                     print 'Slope:',slope
@@ -281,20 +304,26 @@ def get_contours(File_Name):
                 print 'Angle:' , Die_Angle
                 
             elif len(approx) > 4:
+                # Assume it's a circle
                 #area=cv.contourArea(cnt)
                 x,y,w,h = cv.boundingRect(cnt)
+                cv.rectangle(src_col,(x,y),(x+w,y+h),(0,255,0),2)
                 aspect_ratio = float(w) / float(h)
-                print 'Aspect Ratio: ',aspect_ratio
+
                 if abs(aspect_ratio - 1) < 0.2: # check to see if it's really a circle
-                    print "Circle"
                     C_count= C_count + 1
+                    print 'Found circle #',C_count, ' w/aspect ratio: ',aspect_ratio
+                    # draw it yellow
                     cv.drawContours(src_col,[cnt],0,(0,255,255),2)
-                    
+                    #cv.imshow("Contours", src_col)        
+                    #cv.waitKey()                   
                 else:
-                    cv.drawContours(src_col,[cnt],0,(64,128,64),8)    
+                    # draw it red
+                    print 'not a circle'
+                    cv.drawContours(src_col,[cnt],0,(0,0,255),8)    
                     
             else:
-                print 'Contour',index,' is complex - in red'
+                #print 'Contour',index,' is complex - in red'
                 cv.drawContours(src_col,[cnt],0,(0,0,255),1)
 
             #cv.imshow("Contours", src_col)
@@ -302,11 +331,11 @@ def get_contours(File_Name):
             #sleep(1)
 
         else:
-            print 'Contour length tiny - ignored (in orange)'
+            #print 'Contour length tiny - ignored (in orange)'
             cv.drawContours(src_col,[cnt],0,(0,128,255),8)
             
     cv.imshow("Contours", src_col)        
-    #cv.waitKey()
+    cv.waitKey()
     print'Completed image analysis'
     sleep(1)
     cv.destroyAllWindows()
@@ -315,36 +344,21 @@ def get_contours(File_Name):
     if S_count != 1:
         Centroid_X = 0
         Centroid_Y = 0
-        Die_Angle=0
-        C_count=-1
-    print 'cx, cy,angle',Centroid_X,Centroid_Y,Die_Angle
+        Die_Angle = 0
+        C_count = -1
+    print 'cx, cy, angle',Centroid_X,Centroid_Y,Die_Angle
     return (Centroid_X,Centroid_Y,Die_Angle,C_count,S_count)
 
 def get_diff_image(Null_File,Roll_File,Crop):
     img1=Image.open(ImDir + Null_File + '.jpg')
     img2=Image.open(ImDir + Roll_File + '.jpg')
-    
-    #img1=img1.crop((685,50,1006,756))
-    #img2=img2.crop((685,50,1006,756))
+
 
     img1=img1.crop((Crop[0],Crop[1],Crop[2],Crop[3]))
     img2=img2.crop((Crop[0],Crop[1],Crop[2],Crop[3]))
         
     diff12=ImageChops.subtract(img1,img2)
     diff21=ImageChops.subtract(img2,img1)
-    
-#    # Convert to Grayscale
-#    diff12 = rgb2gray(diff12)
-#    diff21 = rgb2gray(diff21)
-#    
-#    # Increase Gamma a lot
-#    # Increase contrast a bit
-##    
-#    contr1 = ImageEnhance.Contrast(img1)    
-#    contr2 = ImageEnhance.Contrast(img2)
-#    
-#    img1=contr1.enhance(20)
-#    img2=contr2.enhance(20)
     
     diff12.save(ImDir+"diff12.jpg")
     diff21.save(ImDir+"diff21.jpg")
@@ -398,8 +412,6 @@ def read_csv_to_df(filename):
     df_name = pd.DataFrame(pd.read_csv(filename,na_values='n/a'))
     return df_name
     
-
-
 def robot_move_IK():
     IK_run = get_user_input('Ready to move robot (y/n)?')
 
@@ -418,8 +430,9 @@ def robot_move_IK():
         return (IK_x,IK_y,IK_z,IK_rot,IK_pinc)
 
 def robot_init():
-    Servo.close()
-    print 'maestro off'
+    if PiFlag == 1:
+        Servo.close()
+        print 'maestro off'
 
 def robot_move(XC,YC,ZC,RC,PC):
     global Rbase_CurPos,L_arm_CurPos,U_arm_CurPos,E_arm_CurPos,Pinc_CurPos,R_Accel,R_Speed
@@ -541,7 +554,7 @@ def robot_move(XC,YC,ZC,RC,PC):
 def robot_tweak():
     # Simple manual single-channel robot servo command function
     global Rbase_CurPos,L_arm_CurPos,U_arm_CurPos,E_arm_CurPos,Pinc_CurPos,R_Accel,R_Speed
-    while get_user_input('Hit y to continue') == 'y':
+    while get_user_input('Hit y to tweak') == 'y':
         
         R_cmd = int(get_user_input('Uarm(1), Larm(2), Pinc(5), Rbase(4), Earm(3), reset(6)'))
 
@@ -581,7 +594,7 @@ def servo_move(n,a,s,p):
     
 def sc_to_angle(CurPos,B,M):
     # Convert servo command to angle (degrees)
-    Angle = (CurPos - B)/M
+    Angle = float((float(CurPos) - float(B))/float(M))
     return Angle
 
 def take_picture(Count,Label):
@@ -599,7 +612,7 @@ def take_picture(Count,Label):
         return('null photo')
 
 def three_d_conv(P_i,Th):
-    # Convert 2D coordinates
+    # Convert 2D coordinates.  P_i is a three-vector
     Th = math.radians(Th)
     RotMax = [[np.cos(Th),-np.sin(Th),0],[np.sin(Th),np.cos(Th),0],[0,0,1]]
     P_0 = np.dot(P_i,RotMax)
@@ -654,7 +667,9 @@ else:
     import cv2 as cv
     ImDir = PCDir+"\Images\\"
     ConDir = PCDir + "\Config\\"
+    
 CV_Ver = cv.__version__
+
 # Get Config File
 Config_File = 'POIS_3_Save.csv'
 print 'Using Configuration File: ',Config_File
@@ -718,21 +733,29 @@ Tower_BC = np.array(DHP['Tower'][9:12]).T
 Camera_BC = np.array(DHP['Camera'][9:12]).T
 CCS_Th = DHP['Camera'][4]
 
+ImScale = 41
+
+#Reference tack in base coords
+Im_bias_X = 10.5
+Im_bias_Y = 25.4
+
 ## Convert Base coordinates to Robot Base coordinates
 # Rotation, then translation
 Rbase_rot = three_d_conv(Rbase_BC,CCS_Th)
 Camera_rot = three_d_conv(Camera_BC,CCS_Th)
 Tower_rot = three_d_conv(Tower_BC,CCS_Th)
+Tack_rot = three_d_conv((Im_bias_X,Im_bias_Y,0),CCS_Th)
 
-Rbase_RB = Rbase_rot- Rbase_rot
+Rbase_RB = Rbase_rot - Rbase_rot
 Camera_RB = Camera_rot - Rbase_rot
 Tower_RB = Tower_rot - Rbase_rot
+Tack_RB = Tack_rot - Rbase_rot
 
-print "Rbase, Camera, Tower locations in Rbase coords:"
+print "Rbase, Camera, Tower, Tack locations in Rbase coords:"
 print Rbase_RB,'\n'
 print Camera_RB, '\n'
 print Tower_RB, '\n'
-
+print Tack_RB, '\n'
 # Get angle to servo command matrix
 # Intercepts are zero servo points (home)
 # Need to put zero-angles in for each CF
@@ -779,7 +802,7 @@ print 'Intercept Servo Location: ',Intercept_Servo
 
 # Initialize Servo Commands
 if PiFlag == 1:
-    servo_move(Rbase_Ch,R_Accel,R_Speed,6000)
+    servo_move(Rbase_Ch,R_Accel,R_Speed,6500)
     servo_move(L_arm_Ch,R_Accel,R_Speed,6000)
     servo_move(U_arm_Ch,R_Accel,R_Speed,7000)
     servo_move(E_arm_Ch,R_Accel,R_Speed,6112)
@@ -792,7 +815,7 @@ if PiFlag == 1:
     Pinc_CurPos = Servo.getPosition(Pinc_Ch)
 
 else:
-    Rbase_CurPos = 6000
+    Rbase_CurPos = 6500
     L_arm_CurPos = 6000
     U_arm_CurPos = 7000
     E_arm_CurPos = 6112
@@ -807,7 +830,8 @@ Th_ua = sc_to_angle(U_arm_CurPos, U_arm_SC_b, U_arm_SC_m)
 Th_ea = sc_to_angle(E_arm_CurPos, E_arm_SC_b, E_arm_SC_m)
 Th_pc = sc_to_angle(Pinc_CurPos, Pinc_SC_b, Pinc_SC_m)
 
-print 'CurPos Angles: ',math.degrees(Th_rb),math.degrees(Th_la),math.degrees(Th_ua),'\n'
+print 'CurPos Angles (deg): ',Th_rb,Th_la,Th_ua,'\n'
+#print 'CurPos Angles: ',math.degrees(Th_rb),math.degrees(Th_la),math.degrees(Th_ua),'\n'
 
 FK = for_kin(L_arm_X,L_arm_Z,U_arm_X,E_arm_X,E_arm_Z,Pinc_Z,Th_rb,Th_la,Th_ua)
 
@@ -848,9 +872,19 @@ EmptyFrame = take_picture(0,'Align') # return filename
 EmptyFrame = EmptyFrame+'.jpg'
 print 'Using',EmptyFrame,' for reference'
 
-Crop = get_refpoints(EmptyFrame)
+Ref_pts,Crop = get_refpoints(EmptyFrame)
 # Then transform into robot coordinates to use below
-# Also maybe get die coordinates
+
+X_maxpix = Ref_pts.loc[Ref_pts['cx'].idxmax()][1]
+Y_maxpix = Ref_pts.loc[Ref_pts['cx'].idxmax()][2]
+
+X_minpix = Ref_pts.loc[Ref_pts['cx'].idxmin()][1]
+Y_minpix = Ref_pts.loc[Ref_pts['cx'].idxmin()][2]
+
+# Coordinates of full image frame in Rbase CCS
+X_refpix = Tack_RB[0] - Y_maxpix/ImScale
+Y_refpix = Tack_RB[1] - X_maxpix/ImScale
+print 'corner of image frame', X_refpix,Y_refpix
 
 ## Next, move the robot to the center of the camera field and take a picture
 
@@ -883,7 +917,7 @@ Roll_Count = 1
 
 while Roll_Count <= Num_Rolls:
     # Move Robot around if desired
-    if get_user_input('Do you want to adjust robot position?') == 'y':
+    while get_user_input('Do you want to adjust robot position?') == 'y':
         #robot_tweak()
         Th_rb = sc_to_angle(Rbase_CurPos, Rbase_SC_b, Rbase_SC_m)
         Th_la = sc_to_angle(L_arm_CurPos, L_arm_SC_b, L_arm_SC_m)
@@ -938,11 +972,23 @@ while Roll_Count <= Num_Rolls:
     print 'Pips for Roll#',Roll_Count,':',Contour_Data[3]
     # 7. Calculate die orientation
     R_Die = float(Contour_Data[2])
-    R_x = float(Contour_Data[0])
-    R_y = float(Contour_Data[1])
-    R_x = (R_x/41.0) - 6.0
-    R_y = (R_y/41.0) + 18.0
+    R_x = float(Contour_Data[1])
+    R_y = float(Contour_Data[0])
+    
+### Working
+    Im_diff = cv.imread(ImDir + 'diff21.jpg')
+    cv.circle(Im_diff,(int(R_x),int(R_y)),4,(255,0,255),2,1)
+
+    # subtract frame CCS
+    R_x = (R_x/ImScale) + X_refpix
+    R_y = ((R_y+X_minpix)/ImScale) + Y_refpix
     print 'Rx,Ry:',R_x,R_y
+    
+    cv.imshow('Die Location', Im_diff)
+    cv.waitKey()
+    sleep(1)
+    cv.destroyAllWindows()
+    
     # 8. Plan motion path
     
     # 9. Execute motion to pick up die and return to tower
@@ -968,14 +1014,13 @@ while Roll_Count <= Num_Rolls:
     # Elapsed time per roll?
     Roll_Count = Roll_Count + 1
 
-    # robot_ex()
-
 # When all done with runs, go to data reduction
 cont = get_user_input('Continue to data reduction (y/n)?')
 if cont <>'y':
     robot_init()
-    exit('Program Aborted')
-
+    cv.destroyAllWindows()
+    #sys.exit('Program Aborted')
+    quit()
 # Update stats/distribution
 print ('Run complete, proceeding to data reduction')
 robot_init()
