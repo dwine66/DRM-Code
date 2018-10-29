@@ -445,7 +445,7 @@ def robot_move(XC,YC,ZC,RC,PC):
     
     print 'New Position Servo Commands: ',Rbase_NewPos,L_arm_NewPos, U_arm_NewPos, E_arm_NewPos, Pinc_NewPos
     
-    FK = for_kin(L_arm_X,L_arm_Z,U_arm_X,E_arm_X,E_arm_Z,Pinc_Z,Th1,Th2,Th3)
+    #FK = for_kin(L_arm_X,L_arm_Z,U_arm_X,E_arm_X,E_arm_Z,Pinc_Z,Th1,Th2,Th3)
     
     # Check to make sure the robot isn't going to crash...
     if Rbase_NewPos < Rbase_SMin or Rbase_NewPos > Rbase_SMax:
@@ -592,8 +592,10 @@ print 'Raspberry Pi Enabled:',PiFlag,'\n'
 date_now = datetime.now()
 date_now = date_now.strftime('%Y%m%d-%H%M%S')
 
+print date_now,'\n'
+
 R_Accel = 4
-R_Speed = 4
+R_Speed = 8
 
 PCDir="S:\Dave\QH\BBP\Dice Rolling Machine\DRM-Poisson\\"
 PiDir="/home/pi/Desktop/DRM/"
@@ -693,7 +695,7 @@ Tower_BC = np.array(DHP['Tower'][9:12]).T
 Camera_BC = np.array(DHP['Camera'][9:12]).T
 CCS_Th = DHP['Camera'][4]
 
-ImScale = 41
+ImScale = 39.04
 
 #Reference tack in base coords
 Im_bias_X = DHP['LR_Tack'][9]
@@ -749,9 +751,10 @@ Pinc_SC_m,Pinc_SC_b = angle_to_sc(Pinc_SC)
 print 'Pinc Servo Limits: ', Pinc_SC
 print 'Pinc slope, intercept: ', Pinc_SC_m,Pinc_SC_b,'\n'
 
+# Pincer setup
 Pinc_Open = DHP['Pinc'][1]/2
 Pinc_Close = DHP['Pinc'][0]
-Pinc_Grab_Die = Pinc_Open/10
+Pinc_Grab_Die = Pinc_Open/5
 print 'Pincer Range:',Pinc_Open,Pinc_Close,Pinc_Grab_Die
 
 # Intercept_Servo is the zero angle for all servos
@@ -790,7 +793,7 @@ Th_pc = sc_to_angle(Pinc_CurPos, Pinc_SC_b, Pinc_SC_m)
 print 'CurPos Angles (deg): ',Th_rb,Th_la,Th_ua,'\n'
 #print 'CurPos Angles: ',math.degrees(Th_rb),math.degrees(Th_la),math.degrees(Th_ua),'\n'
 
-FK = for_kin(L_arm_X,L_arm_Z,U_arm_X,E_arm_X,E_arm_Z,Pinc_Z,Th_rb,Th_la,Th_ua)
+#FK = for_kin(L_arm_X,L_arm_Z,U_arm_X,E_arm_X,E_arm_Z,Pinc_Z,Th_rb,Th_la,Th_ua)
 
 # Force user to set position before proceeding
 print 'Current Servo Commands:', Rbase_CurPos, L_arm_CurPos, U_arm_CurPos, '\n'
@@ -804,9 +807,9 @@ if PiFlag == 1:
 ## Inverse Kinematics - Input X,Y,Z in base frame
 # input desired EE location in RB coordinates (get from camera)
 
-#Initial Robot Position (should be under the camera)
-X_command = 10
-Y_command = 20
+#Initial Robot Position (should be over reference tack)
+X_command = Tack_RB[0]
+Y_command = Tack_RB[1]
 Z_command = 12
 R_command = 0
 P_command = Pinc_Open
@@ -830,7 +833,7 @@ X_command = 15
 Y_command = 8
 Z_command = 15
 R_command = 0
-P_command = Pinc_Close
+P_command = Pinc_Grab_Die
 robot_move(X_command, Y_command,Z_command,R_command,P_command)
 
 #TBD
@@ -871,6 +874,7 @@ Roll_Count = 1
 while Roll_Count <= Num_Rolls:
     # Move Robot around if desired
     while get_user_input('Do you want to adjust robot position?') == 'y':
+
         #robot_tweak()
         Th_rb = sc_to_angle(Rbase_CurPos, Rbase_SC_b, Rbase_SC_m)
         Th_la = sc_to_angle(L_arm_CurPos, L_arm_SC_b, L_arm_SC_m)
@@ -896,7 +900,8 @@ while Roll_Count <= Num_Rolls:
     X_command = 15
     Y_command = 8
     robot_move(X_command, Y_command,Z_command,R_command,P_command)
-    
+
+    sleep(2)
     # 1. Take null picture and do validity checks
     Null_Photo = take_picture(Roll_Count,'Null')
     print 'Null picture taken'
@@ -926,6 +931,7 @@ while Roll_Count <= Num_Rolls:
     # 5. Go image it and get pip count and die location
     Diff_Photo = get_diff_image(Null_Photo,Roll_Photo,Crop)   
     Contour_Data = get_contours('diff21.jpg')
+    
     # 6. Log result
     print 'Pips for Roll#',Roll_Count,':',Contour_Data[3],'\n'
     # 7. Calculate die orientation
@@ -935,7 +941,6 @@ while Roll_Count <= Num_Rolls:
     print 'Pixel X,Y of die center:',Pix_x,Pix_y
     print 'Die Angle:',R_Die
     
-### Working
     Im_diff = cv.imread(ImDir + 'diff21.jpg')
     cv.circle(Im_diff,(int(Pix_x),int(Pix_y)),4,(255,0,255),2,1)
 
@@ -959,7 +964,7 @@ while Roll_Count <= Num_Rolls:
     robot_move(X_command, Y_command,Z_command,R_command,P_command)
 
     #Then drop down
-    Z_command = -2
+    Z_command = -1.5
     robot_move(X_command, Y_command,Z_command,R_command,P_command)
 
     #Then grab it
