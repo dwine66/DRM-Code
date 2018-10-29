@@ -53,7 +53,7 @@ print 'Image libraries loaded'
 def angle_to_sc(SC_Vec):
     # Converts arm angles to servo counts
     SC_Vec_m = (float(SC_Vec[2]) - float(SC_Vec[3])) / (float(SC_Vec[0]) - float(SC_Vec[1]) ) 
-    SC_Vec_b = float(SC_Vec[2])-SC_Vec_m*(float(SC_Vec[0])-float(SC_Vec[4]))
+    SC_Vec_b = float(SC_Vec[2]) + SC_Vec_m*(float(SC_Vec[0]) + float(SC_Vec[4]))
     return SC_Vec_m,SC_Vec_b # Output is in counts/deg
 
 def for_kin(LAX,LAZ,UAX,EAX,EAZ,PZ,th1,th2,th3):
@@ -116,7 +116,7 @@ def get_spots(File):
     upper_red = np.array([255,255,255])
     
     mask = cv.inRange(hsv, lower_red, upper_red)
-    print mask
+    #print mask
     res = cv.bitwise_and(img1,img1, mask = mask)
 
 ##    cv.imshow('frame',img1)
@@ -201,7 +201,7 @@ def get_refpoints(File_Name):
                     
                     X_abs = float(Y_box)/ImScale - Im_bias_Y
                     Y_abs = float(X_box)/ImScale - Im_bias_X
-                    print 'location in robot CS: ',X_abs,Y_abs
+                    #print 'location in robot CS: ',X_abs,Y_abs
                     
                     cv.circle(src_col,(X_box,Y_box),4,(255,0,255),2,1)
                     cv.drawContours(src_col,[box],0,(255,0,255),3)
@@ -333,13 +333,12 @@ def get_contours(File_Name):
             #print 'Contour length tiny - ignored (in orange)'
             cv.drawContours(src_col,[cnt],0,(0,128,255),8)
             
-    cv.imshow("Contours", src_col)        
-    cv.waitKey()
+    #cv.imshow("Contours", src_col)        
+    #cv.waitKey()
     print'Completed image analysis'
-    sleep(1)
+    #sleep(1)
     cv.destroyAllWindows()
 
-    
     if S_count != 1:
         Centroid_X = 200
         Centroid_Y = 200
@@ -388,7 +387,7 @@ def ik_calc(XB,YB,ZB):
     
     Theta1_IK = math.atan2(YB,XB)
     Theta2_IK = phi1_IK + phi2_IK
-    Theta3_IK = (math.pi) - phi3_IK - Theta2_IK
+    Theta3_IK = Theta2_IK - ((math.pi) - phi3_IK)
     
     Theta1_IK_d = math.degrees(Theta1_IK)
     Theta2_IK_d = math.degrees(Theta2_IK)
@@ -441,8 +440,8 @@ def robot_move(XC,YC,ZC,RC,PC):
     U_arm_NewPos = int(Th3 * U_arm_SC_m + U_arm_SC_b)
     
     # Do end of arm stuff
-    E_arm_NewPos = int(R_command * E_arm_SC_m + E_arm_SC_b) #-Rbase_NewPos
-    Pinc_NewPos = int(P_command * Pinc_SC_m + Pinc_SC_b)
+    E_arm_NewPos = int(RC * E_arm_SC_m + E_arm_SC_b) #-Rbase_NewPos
+    Pinc_NewPos = int(PC * Pinc_SC_m + Pinc_SC_b)
     
     print 'New Position Servo Commands: ',Rbase_NewPos,L_arm_NewPos, U_arm_NewPos, E_arm_NewPos, Pinc_NewPos
     
@@ -550,7 +549,7 @@ def servo_move(n,a,s,p):
     Servo.setAccel(n,a)      #set servo n acceleration
     #print 'set speed'
     Servo.setSpeed(n,s)     #set speed of servo n
-    print 'moving servo', n
+    #print 'moving servo', n
     Servo.setTarget(n,p)  #set servo n to move to position
     
 def sc_to_angle(CurPos,B,M):
@@ -605,7 +604,7 @@ if PiFlag is True:
 # For servo control
     sys.path.append('/home/pi/Pololu')
     import maestro
-    print 'maestro loaded'
+    print 'Maestro loaded'
 
 # Define Working Directories
     WKdir = PiDir    
@@ -615,7 +614,7 @@ if PiFlag is True:
     import cv2 as cv
    #   import cv2.cv as cv1
     from picamera import PiCamera 
-    print 'opencv and camera loaded'
+    print 'Opencv and PiCamera loaded'
 # Initialize servo board and camera
     camera = PiCamera()
     Servo = maestro.Controller()
@@ -700,6 +699,8 @@ ImScale = 41
 Im_bias_X = DHP['LR_Tack'][9]
 Im_bias_Y = DHP['LR_Tack'][10]
 
+print ' Image offsets:',Im_bias_X, Im_bias_Y
+
 ## Convert Base coordinates to Robot Base coordinates
 # Rotation, then translation
 Rbase_rot = three_d_conv(Rbase_BC,CCS_Th)
@@ -748,9 +749,9 @@ Pinc_SC_m,Pinc_SC_b = angle_to_sc(Pinc_SC)
 print 'Pinc Servo Limits: ', Pinc_SC
 print 'Pinc slope, intercept: ', Pinc_SC_m,Pinc_SC_b,'\n'
 
-Pinc_Open = DHP['Pinc'][1]
+Pinc_Open = DHP['Pinc'][1]/2
 Pinc_Close = DHP['Pinc'][0]
-Pinc_Grab_Die = Pinc_Open/4
+Pinc_Grab_Die = Pinc_Open/10
 print 'Pincer Range:',Pinc_Open,Pinc_Close,Pinc_Grab_Die
 
 # Intercept_Servo is the zero angle for all servos
@@ -767,20 +768,15 @@ if PiFlag == 1:
     servo_move(L_arm_Ch,R_Accel,R_Speed,6000)
     servo_move(U_arm_Ch,R_Accel,R_Speed,7000)
     servo_move(E_arm_Ch,R_Accel,R_Speed,6112)
-    servo_move(Pinc_Ch,R_Accel,R_Speed,4000)
+    servo_move(Pinc_Ch,R_Accel,R_Speed,2000)
 
-    Rbase_CurPos = Servo.getPosition(Rbase_Ch)
-    L_arm_CurPos = Servo.getPosition(L_arm_Ch)
-    U_arm_CurPos = Servo.getPosition(U_arm_Ch)
-    E_arm_CurPos = Servo.getPosition(E_arm_Ch)
-    Pinc_CurPos = Servo.getPosition(Pinc_Ch)
     print 'Robot moved home using maestro directly'
-else:
-    Rbase_CurPos = 6500
-    L_arm_CurPos = 6000
-    U_arm_CurPos = 7000
-    E_arm_CurPos = 6112
-    Pinc_CurPos = 4000
+
+Rbase_CurPos = 6500
+L_arm_CurPos = 6000
+U_arm_CurPos = 7000
+E_arm_CurPos = 6112
+Pinc_CurPos = 2000
     
 print 'CurPos Positions: ',Rbase_CurPos,L_arm_CurPos,U_arm_CurPos,E_arm_CurPos,Pinc_CurPos
 
@@ -803,7 +799,7 @@ if PiFlag == 1:
     print 'Please tweak robot servo parameters now'
     robot_tweak()
 
-get_user_input('hit any key to proceed')
+#get_user_input('hit any key to proceed')
 
 ## Inverse Kinematics - Input X,Y,Z in base frame
 # input desired EE location in RB coordinates (get from camera)
@@ -826,12 +822,13 @@ FK = for_kin(L_arm_X,L_arm_Z,U_arm_X,E_arm_X,E_arm_Z,Pinc_Z,Th1,Th2,Th3)
 robot_move(X_command, Y_command,Z_command,R_command,P_command)
 sleep(5)
 # take a picture of the robot for later alignment
+print 'Take picture of robot'
 CRFrame = take_picture(0,'Robot') # return filename
 
 ## Move robot out of frame!!
-X_command = 0
-Y_command = 5
-Z_command = 12
+X_command = 15
+Y_command = 8
+Z_command = 15
 R_command = 0
 P_command = Pinc_Close
 robot_move(X_command, Y_command,Z_command,R_command,P_command)
@@ -851,6 +848,8 @@ Y_maxpix = Ref_pts.loc[Ref_pts['cx'].idxmax()][2]
 X_minpix = Ref_pts.loc[Ref_pts['cx'].idxmin()][1]
 Y_minpix = Ref_pts.loc[Ref_pts['cx'].idxmin()][2]
 
+print'X,Y maxpix',X_maxpix, Y_maxpix
+print'X,Y minpix',X_minpix, Y_minpix
 # Coordinates of full image frame in Rbase CCS - coordinates are flipped and one is reversed!
 X_refpix = Tack_RB[0] - Y_maxpix/ImScale 
 Y_refpix = X_maxpix/ImScale - Tack_RB[1]
@@ -885,17 +884,17 @@ while Roll_Count <= Num_Rolls:
         X_command = float(get_user_input('input x:'))
         Y_command = float(get_user_input('input y:'))
         Z_command = float(get_user_input('input z:'))
-        R_command = R_Die
-        P_command = float(get_user_input('input p (0 to 30):'))
+        R_command = float(get_user_input('input angle:'))
+        P_command = float(get_user_input('input p (0 to 100):'))
         robot_move(X_command, Y_command,Z_command,R_command,P_command)   
 
     # Move up
-    Z_command = 27
+    Z_command = 20
     robot_move(X_command, Y_command,Z_command,R_command,P_command)
 
     # Retract
-    X_command = 2
-    Y_command = 6
+    X_command = 15
+    Y_command = 8
     robot_move(X_command, Y_command,Z_command,R_command,P_command)
     
     # 1. Take null picture and do validity checks
@@ -908,10 +907,11 @@ while Roll_Count <= Num_Rolls:
     #Null_Input= get_user_input('Place die and continue')
     
     # Traverse
-    X_command = -6.5
+    X_command = -10
     Y_command = 22
+    Z_command = 27
     robot_move(X_command, Y_command,Z_command,R_command,P_command)
-    
+    sleep(5)
     # 3. Drop die
     P_command = Pinc_Open
     robot_move(X_command, Y_command,Z_command,R_command,P_command)
@@ -927,24 +927,25 @@ while Roll_Count <= Num_Rolls:
     Diff_Photo = get_diff_image(Null_Photo,Roll_Photo,Crop)   
     Contour_Data = get_contours('diff21.jpg')
     # 6. Log result
-    print 'Pips for Roll#',Roll_Count,':',Contour_Data[3]
+    print 'Pips for Roll#',Roll_Count,':',Contour_Data[3],'\n'
     # 7. Calculate die orientation
     R_Die = float(Contour_Data[2])
     Pix_x = float(Contour_Data[0])
     Pix_y = float(Contour_Data[1])
+    print 'Pixel X,Y of die center:',Pix_x,Pix_y
+    print 'Die Angle:',R_Die
     
 ### Working
     Im_diff = cv.imread(ImDir + 'diff21.jpg')
     cv.circle(Im_diff,(int(Pix_x),int(Pix_y)),4,(255,0,255),2,1)
 
     # Move into RCS
-    R_x = ((Pix_x + X_minpix)/ImScale) + X_refpix
-    R_y = (Pix_y / ImScale) + Y_refpix
+    R_y = ((Pix_x + X_minpix)/ImScale) + Y_refpix
+    R_x = (Pix_y / ImScale) + X_refpix
     print 'Rx,Ry:',R_x,R_y
     
     cv.imshow('Die Location', Im_diff)
     cv.waitKey()
-    sleep(1)
     cv.destroyAllWindows()
     
     # 8. Plan motion path
@@ -958,7 +959,7 @@ while Roll_Count <= Num_Rolls:
     robot_move(X_command, Y_command,Z_command,R_command,P_command)
 
     #Then drop down
-    Z_command = 3.5
+    Z_command = -2
     robot_move(X_command, Y_command,Z_command,R_command,P_command)
 
     #Then grab it
